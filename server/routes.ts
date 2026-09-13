@@ -345,8 +345,14 @@ async function bookTimeSlot(req: Request, res: Response) {
 
   const schoolId = pathParam(req, "schoolId");
   const source = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const clientId = typeof source.client_id === "string" ? source.client_id : "";
-  const slotId = typeof source.slot_id === "string" ? source.slot_id : "";
+  // Accept both wire formats so a cached browser bundle can still book after
+  // the API moved to snake_case. The current client sends snake_case.
+  const clientId = typeof source.client_id === "string"
+    ? source.client_id
+    : typeof source.clientId === "string" ? source.clientId : "";
+  const slotId = typeof source.slot_id === "string"
+    ? source.slot_id
+    : typeof source.slotId === "string" ? source.slotId : "";
   if (!clientId || !slotId) throw error("Выберите клиента и окошко");
 
   const transaction = await pool.connect();

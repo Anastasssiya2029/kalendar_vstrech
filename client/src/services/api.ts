@@ -148,7 +148,7 @@ class ApiService {
   async bookTimeSlot(schoolId: string, clientId: string, slotId: string) {
     return this.request<{ meeting: any; timeSlot: any; client: any }>(this.schoolPath(schoolId, "bookings"), {
       method: "POST",
-      body: JSON.stringify({ clientId, slotId }),
+      body: JSON.stringify(camelToSnake({ clientId, slotId })),
     });
   }
 
