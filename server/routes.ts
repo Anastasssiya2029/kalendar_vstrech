@@ -296,6 +296,39 @@ async function deleteEntity(req: Request, res: Response, entity: Entity) {
   if (!user) return;
   const config = entityConfig[entity];
   if (config.adminOnly && !isAdmin(user)) return res.status(403).json({ message: "Доступно только администратору" });
+
+  // A client record can affect meetings and booked slots, therefore it is an
+  // administrator-only operation and is handled atomically below.
+  if (entity === "clients") {
+    if (!isAdmin(user)) return res.status(403).json({ message: "Удалять клиентов может только администратор" });
+    const schoolId = pathParam(req, "schoolId");
+    const clientId = pathParam(req, "id");
+    const transaction = await pool.connect();
+    try {
+      await transaction.query("BEGIN");
+      const client = await transaction.query<{ id: string }>(
+        "SELECT id FROM clients WHERE id = $1 AND school_id = $2 FOR UPDATE",
+        [clientId, schoolId],
+      );
+      if (!client.rows[0]) throw error("Клиент не найден", 404);
+      await transaction.query(
+        `UPDATE time_slots
+         SET is_booked = false, booking_id = NULL, updated_at = now()
+         WHERE school_id = $1
+           AND booking_id IN (SELECT id FROM meetings WHERE client_id = $2 AND school_id = $1)`,
+        [schoolId, clientId],
+      );
+      await transaction.query("DELETE FROM clients WHERE id = $1 AND school_id = $2", [clientId, schoolId]);
+      await transaction.query("COMMIT");
+      return res.status(204).end();
+    } catch (cause) {
+      await transaction.query("ROLLBACK").catch(() => undefined);
+      throw cause;
+    } finally {
+      transaction.release();
+    }
+  }
+
   const { conditions, values } = scopeFor(entity, pathParam(req, "schoolId"), user);
   values.push(pathParam(req, "id"));
   conditions.push(`id = $${values.length}`);

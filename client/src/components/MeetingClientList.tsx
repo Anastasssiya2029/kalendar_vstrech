@@ -13,10 +13,11 @@ interface MeetingClientListProps {
   onMarkSale?: (clientId: string, soldTariff: string, saleAmount: number) => void;
   onTogglePin?: (clientId: string) => void;
   onSelectTimeForClient?: (clientId: string) => void;
+  onDeleteClient?: (clientId: string) => void;
   meetings?: Meeting[];
 }
 
-export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRescheduleMeeting, onCancelMeeting, onMarkSale, onTogglePin, onSelectTimeForClient, meetings = [] }: MeetingClientListProps) {
+export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRescheduleMeeting, onCancelMeeting, onMarkSale, onTogglePin, onSelectTimeForClient, onDeleteClient, meetings = [] }: MeetingClientListProps) {
   type ClientListStatus = Exclude<ClientStatus, 'ready'> | 'rescheduled' | 'all';
   const [statusFilter, setStatusFilter] = useState<ClientListStatus>('all');
   const [usernameSearch, setUsernameSearch] = useState('');
@@ -202,6 +203,7 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
               onMarkSale={onMarkSale}
               onTogglePin={onTogglePin}
               onSelectTimeForClient={onSelectTimeForClient}
+              onDeleteClient={onDeleteClient}
               meetings={meetings}
             />
           ))}

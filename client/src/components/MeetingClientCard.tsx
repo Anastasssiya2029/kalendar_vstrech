@@ -3,8 +3,9 @@ import { Client, Meeting, getClientStatusColor, getClientStatusText, getMeetingS
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Calendar, Clock, User, Edit2, Check, XCircle, RefreshCw, DollarSign, Pin } from 'lucide-react';
+import { Calendar, Clock, User, Edit2, Check, XCircle, RefreshCw, DollarSign, Pin, Trash2 } from 'lucide-react';
 import { MeetingCancellationDialog } from './MeetingCancellationDialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface MeetingClientCardProps {
   client: Client;
@@ -15,6 +16,7 @@ interface MeetingClientCardProps {
   onMarkSale?: (clientId: string, soldTariff: string, saleAmount: number) => void;
   onTogglePin?: (clientId: string) => void;
   onSelectTimeForClient?: (clientId: string) => void;
+  onDeleteClient?: (clientId: string) => void;
 }
 
 const formatDateShort = (date: Date): string => {
@@ -30,7 +32,7 @@ const formatDateCompact = (date: Date): string => {
   return `${day}.${month}.${year}`;
 };
 
-export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRescheduleMeeting, onCancelMeeting, onMarkSale, onTogglePin, onSelectTimeForClient, meetings = [] }: MeetingClientCardProps & { meetings?: Meeting[] }) {
+export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRescheduleMeeting, onCancelMeeting, onMarkSale, onTogglePin, onSelectTimeForClient, onDeleteClient, meetings = [] }: MeetingClientCardProps & { meetings?: Meeting[] }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [saleData, setSaleData] = useState({
@@ -38,6 +40,7 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
     saleAmount: ''
   });
   const [meetingToCancel, setMeetingToCancel] = useState<Meeting | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const clientMeetingsFromStore = meetings
     .filter((meeting) => meeting.clientId === client.id)
@@ -152,6 +155,22 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
                 className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
               >
                 <Edit2 className="w-4 h-4" />
+              </Button>
+            )}
+
+            {onDeleteClient && (
+              <Button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsDeleteDialogOpen(true);
+                }}
+                variant="ghost"
+                size="sm"
+                className="meeting-client-delete-action"
+                title="Удалить клиента"
+                aria-label={`Удалить клиента ${client.firstName} ${client.lastName}`}
+              >
+                <Trash2 className="w-4 h-4" />
               </Button>
             )}
             
@@ -539,6 +558,24 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
           </div>
         </div>
       )}
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="client-delete-dialog">
+          <DialogHeader className="client-delete-dialog-header">
+            <div className="client-delete-dialog-icon"><Trash2 className="w-5 h-5" /></div>
+            <div>
+              <DialogTitle>Удалить клиента?</DialogTitle>
+              <DialogDescription>
+                Карточка {client.firstName} {client.lastName}, связанные встречи и записи будут удалены. Свободные окошки снова станут доступными.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="client-delete-dialog-actions">
+            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className="client-delete-dialog-cancel">Отмена</Button>
+            <Button type="button" onClick={() => { onDeleteClient?.(client.id); setIsDeleteDialogOpen(false); }} className="client-delete-dialog-confirm">Удалить клиента</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <MeetingCancellationDialog
         meeting={meetingToCancel}
         client={client}

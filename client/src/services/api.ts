@@ -127,6 +127,10 @@ class ApiService {
     });
   }
 
+  async deleteClient(schoolId: string, clientId: string) {
+    await this.request<void>(this.schoolPath(schoolId, `clients/${encodeURIComponent(clientId)}`), { method: "DELETE" });
+  }
+
   async getMeetings(schoolId: string, filters: Record<string, string | boolean | undefined> = {}) {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value !== undefined) search.set(key, String(value));

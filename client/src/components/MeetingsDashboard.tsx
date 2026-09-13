@@ -90,6 +90,7 @@ function initialDashboardView(): DashboardView {
 export function MeetingsDashboard() {
   const { user, school, schools, isSchoolsDirectory, selectSchool, createSchool, updateSchool, updateProfile } = useAuth();
   const canManageUsers = user?.role === 'admin' || user?.role === 'architect';
+  const canDeleteClients = user?.role === 'admin' || user?.role === 'architect';
   
   const [clients, setClients] = useState<Client[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -356,6 +357,33 @@ export function MeetingsDashboard() {
         }
         toast.error('Ошибка удаления окошка');
       }
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (!school?.id) return;
+
+    try {
+      await apiService.deleteClient(school.id, clientId);
+
+      const deletedMeetingIds = new Set(
+        meetings
+          .filter((meeting) => meeting.clientId === clientId)
+          .map((meeting) => meeting.id),
+      );
+
+      setClients((current) => current.filter((client) => client.id !== clientId));
+      setMeetings((current) => current.filter((meeting) => meeting.clientId !== clientId));
+      setTimeSlots((current) => current.map((slot) =>
+        slot.bookingId && deletedMeetingIds.has(slot.bookingId)
+          ? { ...slot, isBooked: false, bookingId: undefined }
+          : slot,
+      ));
+      setEditingClient((current) => current?.id === clientId ? null : current);
+      toast.success('Клиент удалён');
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      toast.error('Не удалось удалить клиента');
     }
   };
 
@@ -1101,6 +1129,7 @@ export function MeetingsDashboard() {
                 window.dispatchEvent(event);
               }, 100);
             }}
+            onDeleteClient={canDeleteClients ? handleDeleteClient : undefined}
           />
         ) : selectedView === 'calendar' ? (
           <MeetingsCalendar
