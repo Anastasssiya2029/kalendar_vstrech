@@ -143,8 +143,8 @@ export function DayDetailsDialog({
                     className={`meeting-detail-card meeting-detail-card--${getMeetingTone(actualStatus)}`}
                   >
                     {/* Заголовок карточки с цветом статуса */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
+                    <div className="meeting-detail-card-header flex items-start justify-between mb-3">
+                      <div className="meeting-detail-card-title flex items-center gap-3">
                           <div 
                             className="meeting-detail-status-dot"
                           style={{ backgroundColor: getMeetingCardColor(actualStatus) }}
@@ -175,7 +175,7 @@ export function DayDetailsDialog({
                     </div>
 
                     {/* Детали встречи */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <div className="meeting-detail-meta-grid grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                       {/* Юзернейм */}
                       <div className="meeting-detail-meta">
                         <User className="w-4 h-4" />

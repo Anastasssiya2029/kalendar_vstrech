@@ -987,8 +987,8 @@ label:not([class*='text-']) {
 }
 
 .meeting-detail-card--cancelled {
-  --meeting-detail-surface: #fff0f3;
-  --meeting-detail-line: #f3cad4;
+  --meeting-detail-surface: #fffafb;
+  --meeting-detail-line: #f0d9df;
   --meeting-detail-ink: #b42345;
 }
 
@@ -3814,6 +3814,8 @@ table tr {
   }
 
   .client-username-search {
+    /* In a vertical toolbar flex-basis becomes height; keep the search compact. */
+    flex: 0 0 auto;
     width: 100%;
     min-width: 0;
   }
@@ -3989,8 +3991,8 @@ table tr {
   }
 
   .time-slots-create-overlay {
-    align-items: flex-end;
-    padding: 0.75rem;
+    align-items: center;
+    padding: 1rem;
   }
 
   .time-slots-create-panel {
@@ -4183,4 +4185,122 @@ table tr {
   overflow: hidden;
   background-clip: padding-box;
   border-radius: 0.85rem;
+}
+
+/* Meeting details use status as a clear accent, not as a full-card wash. This keeps
+   cancelled meetings calm and just as readable as every other meeting. */
+.meeting-detail-card {
+  padding: 1.05rem;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 10px 24px rgba(49, 27, 67, 0.055);
+}
+
+.meeting-detail-card-header {
+  gap: 0.75rem;
+  padding-bottom: 0.8rem;
+  margin-bottom: 0.85rem !important;
+  border-bottom: 1px solid #eee5ef;
+}
+
+.meeting-detail-card-title {
+  min-width: 0;
+}
+
+.meeting-detail-card-title > div:last-child,
+.meeting-detail-meta span,
+.meeting-detail-comment p,
+.meeting-detail-sale span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meeting-detail-meta-grid {
+  gap: 0.6rem !important;
+  margin-bottom: 0.7rem !important;
+}
+
+.meeting-detail-meta {
+  min-height: 2.7rem;
+  padding: 0.62rem 0.68rem;
+  color: #514354;
+  background: #fbf9fc;
+  border-color: #eee5ef;
+  box-shadow: none;
+}
+
+.meeting-detail-meta span {
+  color: inherit !important;
+  line-height: 1.35;
+}
+
+.meeting-detail-comment {
+  padding: 0.78rem;
+  margin-bottom: 0.7rem;
+  color: #5d5261;
+  background: #fcfafc;
+  border-color: #eee5ef;
+  box-shadow: none;
+}
+
+.meeting-detail-comment p {
+  color: inherit !important;
+  line-height: 1.45;
+}
+
+.meeting-detail-sale {
+  margin-bottom: 0.7rem;
+  box-shadow: none;
+}
+
+@media (max-width: 40rem) {
+  /* The last metric intentionally spans both columns: it reads as a complete
+     fifth item instead of a stranded, wrapped half-card. */
+  .calendar-stat-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "icon value"
+      "label label";
+    align-items: center;
+    gap: 0.35rem 0.58rem;
+    min-height: 0;
+    padding: 0.72rem 0.76rem;
+  }
+
+  .calendar-stat-card--sale {
+    grid-column: 1 / -1;
+  }
+
+  .calendar-stat-icon {
+    grid-area: icon;
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .calendar-stat-card > div {
+    grid-area: value;
+    min-width: 0;
+  }
+
+  .calendar-stat-value {
+    font-size: 1.42rem;
+  }
+
+  .calendar-stat-label {
+    grid-area: label;
+    margin: 0;
+    color: #62576a;
+    font-size: 0.75rem;
+    line-height: 1.22;
+    overflow-wrap: anywhere;
+  }
+
+  .meeting-detail-card-header {
+    align-items: flex-start;
+  }
+
+  .meeting-detail-reschedule {
+    flex: 0 0 auto;
+    padding: 0.3rem 0.42rem;
+  }
 }
