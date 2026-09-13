@@ -214,7 +214,8 @@ export async function queueMeetingNotification(
     SELECT connection.user_id
     FROM telegram_connections connection
     JOIN users recipient ON recipient.id = connection.user_id AND recipient.is_active = true
-    WHERE (connection.user_id = $1 AND recipient.role = 'manager') OR recipient.role = 'architect'
+    WHERE (connection.user_id = $1 AND recipient.role IN ('manager', 'admin', 'architect'))
+       OR recipient.role = 'architect'
   `, [meeting.manager_id]);
   for (const recipient of recipients.rows) {
     await query(`
@@ -319,7 +320,7 @@ async function weeklyMetrics(schoolId: string, period: WeeklyPeriod) {
       COUNT(event.id) FILTER (WHERE event.event_type = 'meeting_cancelled')::int AS meetings_cancelled
     FROM users user
     LEFT JOIN telegram_activity_events event ON event.manager_id = user.id AND event.created_at >= $2::date AND event.created_at < now()
-    WHERE user.school_id = $1 AND user.role = 'manager'
+    WHERE user.school_id = $1 AND user.role IN ('manager', 'admin', 'architect')
     GROUP BY user.id, user.name
     ORDER BY user.name ASC
   `, [schoolId, period.start]);

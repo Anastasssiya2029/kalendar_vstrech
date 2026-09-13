@@ -25,6 +25,10 @@ type Role = "architect" | "admin" | "manager";
 type AuthUser = { id: string; email: string; name: string; role: Role; school_id: string };
 type Entity = "clients" | "meetings" | "time_slots" | "tariffs" | "payments";
 
+function isOperativeRole(value: unknown): value is "manager" | "admin" {
+  return value === "manager" || value === "admin";
+}
+
 const entityConfig: Record<Entity, { fields: readonly string[]; orderBy: string; adminOnly?: boolean }> = {
   clients: { fields: ["owner_id", "first_name", "last_name", "username", "comment", "status", "form_completed", "pinned", "provided_slot_ids", "time_selection_closed"], orderBy: "created_at DESC" },
   meetings: { fields: ["client_id", "manager_id", "manager_name", "date", "start_time", "status", "sold_tariff", "sale_amount", "payment_method", "original_date", "reschedule_reason", "reschedule_history", "rescheduled_to_meeting_id", "rescheduled_from_meeting_id", "notes"], orderBy: "date ASC, start_time ASC" },
@@ -59,7 +63,7 @@ function isAdmin(user: AuthUser) {
 }
 
 function canUseTelegram(user: AuthUser) {
-  return user.role === "manager" || user.role === "architect";
+  return user.role === "manager" || user.role === "admin" || user.role === "architect";
 }
 
 function publicUser(user: AuthUser) {
@@ -171,10 +175,14 @@ function appendFilters(entity: Entity, queryParams: Request["query"], conditions
 async function enforceManagerReference(schoolId: string, managerId: unknown) {
   if (typeof managerId !== "string") throw error("Укажите менеджера");
   const manager = await query<{ id: string; name: string }>(
-    "SELECT id, name FROM users WHERE id = $1 AND school_id = $2 AND role = 'manager' AND is_active = true",
+    `SELECT id, name FROM users
+     WHERE id = $1
+       AND is_active = true
+       AND role IN ('manager', 'admin', 'architect')
+       AND (school_id = $2 OR role = 'architect')`,
     [managerId, schoolId],
   );
-  if (!manager.rows[0]) throw error("Менеджер не найден", 404);
+  if (!manager.rows[0]) throw error("Сотрудник не найден", 404);
   return manager.rows[0];
 }
 
@@ -234,6 +242,11 @@ async function updateEntity(req: Request, res: Response, entity: Entity) {
   if (!isAdmin(user) && (entity === "meetings" || entity === "time_slots")) {
     delete data.manager_id;
     delete data.manager_name;
+  }
+  if (isAdmin(user) && (entity === "meetings" || entity === "time_slots") && Object.prototype.hasOwnProperty.call(data, "manager_id")) {
+    const manager = await enforceManagerReference(pathParam(req, "schoolId"), data.manager_id);
+    data.manager_id = manager.id;
+    data.manager_name = manager.name;
   }
   if (Object.keys(data).length === 0) throw error("Нет данных для обновления");
 
@@ -466,7 +479,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/auth/telegram", requireUser, async (_req, res, next) => {
     try {
       const user = res.locals.user as AuthUser;
-      if (!canUseTelegram(user)) return res.status(403).json({ message: "Telegram доступен менеджеру или архитектору" });
+      if (!canUseTelegram(user)) return res.status(403).json({ message: "Telegram доступен менеджеру, администратору или архитектору" });
       return res.json({ telegram: await getTelegramStatus(user.id) });
     } catch (cause) { return next(cause); }
   });
@@ -474,7 +487,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/auth/telegram/connect", requireUser, async (_req, res, next) => {
     try {
       const user = res.locals.user as AuthUser;
-      if (!canUseTelegram(user)) return res.status(403).json({ message: "Telegram доступен менеджеру или архитектору" });
+      if (!canUseTelegram(user)) return res.status(403).json({ message: "Telegram доступен менеджеру, администратору или архитектору" });
       const url = await createTelegramConnectUrl(user.id);
       return res.json({ url, expiresInMinutes: 15 });
     } catch (cause) { return next(cause); }
@@ -483,7 +496,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/auth/telegram", requireUser, async (_req, res, next) => {
     try {
       const user = res.locals.user as AuthUser;
-      if (!canUseTelegram(user)) return res.status(403).json({ message: "Telegram доступен менеджеру или архитектору" });
+      if (!canUseTelegram(user)) return res.status(403).json({ message: "Telegram доступен менеджеру, администратору или архитектору" });
       await disconnectTelegram(user.id);
       return res.status(204).end();
     } catch (cause) { return next(cause); }
@@ -561,7 +574,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const managersOnly = req.query.role === "manager";
       const result = await query(
         `SELECT id, email, name, role, school_id, is_active, created_at, updated_at FROM users
-         WHERE school_id = $1 ${managersOnly ? "AND role = 'manager'" : ""} ORDER BY name ASC`, [schoolId],
+         WHERE school_id = $1
+           AND is_active = true
+           ${managersOnly ? "AND role IN ('manager', 'admin')" : ""}
+         ORDER BY name ASC`, [schoolId],
       );
       return res.json({ [managersOnly ? "managers" : "members"]: result.rows.map(camelize) });
     } catch (cause) { return next(cause); }
@@ -574,11 +590,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
       const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
       const password = typeof req.body?.password === "string" ? req.body.password : "";
+      const role = req.body?.role ?? "manager";
       if (!email || !name || !password) throw error("Заполните имя, email и пароль");
+      if (!isOperativeRole(role)) throw error("Можно создать только менеджера или администратора");
+      if (role === "admin" && user.role !== "architect") {
+        return res.status(403).json({ message: "Назначать администраторов может только архитектор" });
+      }
       const passwordHash = await hashPassword(password);
       const result = await query<AuthUser>(
-        "INSERT INTO users (email, name, password_hash, role, school_id) VALUES ($1, $2, $3, 'manager', $4) RETURNING id, email, name, role, school_id, created_at",
-        [email, name, passwordHash, pathParam(req, "schoolId")],
+        "INSERT INTO users (email, name, password_hash, role, school_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, school_id, created_at",
+        [email, name, passwordHash, role, pathParam(req, "schoolId")],
       );
       return res.status(201).json({ user: publicUser(result.rows[0]) });
     } catch (cause) { return next(cause); }
@@ -588,20 +609,65 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const user = assertSchool(req, res);
       if (!user) return;
-      const data = readBody(req.body, ["name", "email", "password"]);
+      const targetId = pathParam(req, "id");
+      const schoolId = pathParam(req, "schoolId");
+      const target = await query<{ id: string; role: Role }>(
+        "SELECT id, role FROM users WHERE id = $1 AND school_id = $2 AND is_active = true",
+        [targetId, schoolId],
+      );
+      const targetUser = target.rows[0];
+      if (!targetUser || targetUser.role === "architect") throw error("Сотрудник не найден", 404);
+      if (user.role === "admin" && targetUser.role !== "manager") {
+        return res.status(403).json({ message: "Администратор может изменять только менеджеров" });
+      }
+
+      const data = readBody(req.body, ["name", "email", "password", "role"]);
       if (typeof data.email === "string") data.email = data.email.trim().toLowerCase();
       if (typeof data.password === "string") { data.password_hash = await hashPassword(data.password); delete data.password; }
+      if (Object.prototype.hasOwnProperty.call(data, "role")) {
+        if (!isOperativeRole(data.role)) throw error("Можно назначить только роль менеджера или администратора");
+        if (user.role !== "architect") {
+          return res.status(403).json({ message: "Менять роль сотрудника может только архитектор" });
+        }
+      }
       if (Object.keys(data).length === 0) throw error("Нет данных для обновления");
       const fields = Object.keys(data);
       const values = Object.values(data);
-      values.push(pathParam(req, "id"), pathParam(req, "schoolId"));
+      values.push(targetId, schoolId);
       const result = await query<AuthUser>(
         `UPDATE users SET ${fields.map((field, index) => `${field} = $${index + 1}`).join(", ")}
-         WHERE id = $${values.length - 1} AND school_id = $${values.length} AND role = 'manager'
+         WHERE id = $${values.length - 1} AND school_id = $${values.length} AND role IN ('manager', 'admin')
          RETURNING id, email, name, role, school_id, created_at`, values,
       );
-      if (!result.rows[0]) throw error("Менеджер не найден", 404);
+      if (!result.rows[0]) throw error("Сотрудник не найден", 404);
       return res.json({ user: publicUser(result.rows[0]) });
+    } catch (cause) { return next(cause); }
+  });
+
+  app.delete("/api/schools/:schoolId/users/:id", requireUser, requireAdmin, async (req, res, next) => {
+    try {
+      const user = assertSchool(req, res);
+      if (!user) return;
+      const targetId = pathParam(req, "id");
+      const schoolId = pathParam(req, "schoolId");
+      if (targetId === user.id) throw error("Нельзя удалить собственную учётную запись");
+      const target = await query<{ id: string; role: Role }>(
+        "SELECT id, role FROM users WHERE id = $1 AND school_id = $2 AND is_active = true",
+        [targetId, schoolId],
+      );
+      const targetUser = target.rows[0];
+      if (!targetUser || targetUser.role === "architect") throw error("Сотрудник не найден", 404);
+      if (user.role === "admin" && targetUser.role !== "manager") {
+        return res.status(403).json({ message: "Администратор может удалить только менеджера" });
+      }
+      const result = await query(
+        `UPDATE users SET is_active = false, updated_at = now()
+         WHERE id = $1 AND school_id = $2 AND role IN ('manager', 'admin')
+         RETURNING id`,
+        [targetId, schoolId],
+      );
+      if (!result.rows[0]) throw error("Сотрудник не найден", 404);
+      return res.status(204).end();
     } catch (cause) { return next(cause); }
   });
 

@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface CompactTimeSlotsProps {
   slots: TimeSlot[];
+  slotOwners?: Array<{ id: string; name: string; role: 'manager' | 'admin' | 'architect' }>;
   bookingStates?: Record<string, { meetingStatus: MeetingStatus; formCompleted: boolean }>;
   onAddSlot: (slot: Omit<TimeSlot, 'id'>) => void;
   onDeleteSlot: (slotId: string) => void;
@@ -90,6 +91,7 @@ type TimeSlotsRange = 'month' | 'current_week' | 'next_week' | 'next_month';
 
 export function CompactTimeSlots({
   slots,
+  slotOwners = [],
   bookingStates = {},
   onAddSlot,
   onDeleteSlot,
@@ -99,6 +101,7 @@ export function CompactTimeSlots({
   const { user } = useAuth();
   const [timeSlotsRange, setTimeSlotsRange] = useState<TimeSlotsRange>('current_week');
   const [selectedManagerId, setSelectedManagerId] = useState<string>('all');
+  const [selectedSlotOwnerId, setSelectedSlotOwnerId] = useState<string>(user?.id || '');
   const [isAddingSlot, setIsAddingSlot] = useState(false);
   const [newSlotDate, setNewSlotDate] = useState<Date | null>(null);
   const [newSlotTime, setNewSlotTime] = useState('10:00');
@@ -120,33 +123,49 @@ export function CompactTimeSlots({
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
-  // Получаем уникальных менеджеров
-  const managers = useMemo(() => {
+  const canManageTeamSlots = user?.role === 'admin' || user?.role === 'architect';
+  const isManager = user?.role === 'manager';
+
+  // The assignment list includes team members even before they create their first slot.
+  const availableSlotOwners = useMemo(() => {
     const managersMap = new Map<string, string>();
+    slotOwners.forEach((member) => managersMap.set(member.id, member.name));
     slots.forEach(slot => {
       if (!managersMap.has(slot.managerId)) {
         managersMap.set(slot.managerId, slot.managerName);
       }
     });
+    if (user?.id && user?.name && !managersMap.has(user.id)) managersMap.set(user.id, user.name);
     return Array.from(managersMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [slots]);
+  }, [slotOwners, slots, user?.id, user?.name]);
 
   // Фильтрация слотов
   const filteredSlots = useMemo(() => {
     let filtered = slots;
     
     // Фильтр по менеджеру (для не-менеджеров)
-    if (user?.role !== 'manager' && selectedManagerId !== 'all') {
+    if (!isManager && selectedManagerId !== 'all') {
       filtered = filtered.filter(slot => slot.managerId === selectedManagerId);
     }
     
     // Фильтр по менеджеру (для менеджеров - только свои)
-    if (user?.role === 'manager') {
+    if (isManager) {
       filtered = filtered.filter(slot => slot.managerId === user.id);
     }
     
     return filtered;
-  }, [slots, selectedManagerId, user]);
+  }, [slots, selectedManagerId, user?.id, isManager]);
+
+  const selectedSlotOwner = availableSlotOwners.find((member) => member.id === selectedSlotOwnerId)
+    ?? availableSlotOwners.find((member) => member.id === user?.id)
+    ?? { id: user?.id || '', name: user?.name || '' };
+
+  const openSlotForm = (date: Date | null = null) => {
+    if (canManageTeamSlots && selectedManagerId !== 'all') setSelectedSlotOwnerId(selectedManagerId);
+    else if (!selectedSlotOwnerId && user?.id) setSelectedSlotOwnerId(user.id);
+    setNewSlotDate(date);
+    setIsAddingSlot(true);
+  };
 
   // Группировка слотов по дням
   const slotsByDay = useMemo(() => {
@@ -164,8 +183,8 @@ export function CompactTimeSlots({
     if (!newSlotDate) return;
 
     const slot: Omit<TimeSlot, 'id'> = {
-      managerId: user?.id || '',
-      managerName: user?.name || '',
+      managerId: isManager ? user?.id || '' : selectedSlotOwner.id,
+      managerName: isManager ? user?.name || '' : selectedSlotOwner.name,
       date: newSlotDate,
       startTime: newSlotTime,
       isBooked: false,
@@ -201,16 +220,16 @@ export function CompactTimeSlots({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 sm:mb-6">
           <div>
             <h2 className="mb-1">
-              {user?.role === 'manager' ? 'Мои окошки' : 'Окошки'}
+              {isManager ? 'Мои окошки' : 'Окошки команды'}
             </h2>
             <p className="text-gray-600 text-sm sm:text-base">
               Просмотр и управление доступными временными окошками
             </p>
           </div>
 
-          {user?.role === 'manager' && (
+          {user && (
             <Button
-              onClick={() => setIsAddingSlot(true)}
+              onClick={() => openSlotForm()}
               className="time-slots-add-button"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -220,7 +239,7 @@ export function CompactTimeSlots({
         </div>
 
         {/* Фильтр по менеджерам (только для не-менеджеров) */}
-        {user?.role !== 'manager' && managers.length > 0 && (
+        {canManageTeamSlots && availableSlotOwners.length > 0 && (
           <div className="time-slots-manager-filter">
             <div className="flex items-center gap-2 flex-wrap">
               <User className="w-4 h-4 text-gray-500" />
@@ -233,13 +252,13 @@ export function CompactTimeSlots({
                 Все менеджеры
               </button>
               
-              {managers.map(manager => (
+              {availableSlotOwners.map(manager => (
                 <button
                   key={manager.id}
                   onClick={() => setSelectedManagerId(manager.id)}
                 className={`time-slots-manager-chip ${selectedManagerId === manager.id ? 'is-active' : ''}`}
                 >
-                  {manager.name}
+                  {manager.name}{manager.id === user?.id ? ' (я)' : ''}
                 </button>
               ))}
             </div>
@@ -342,7 +361,7 @@ export function CompactTimeSlots({
                           </span>
                         </div>
 
-                        {!slot.isBooked && user?.role === 'manager' && (
+                        {!slot.isBooked && (canManageTeamSlots || (isManager && slot.managerId === user?.id)) && (
                           <button
                             type="button"
                             onClick={() => onDeleteSlot(slot.id)}
@@ -355,7 +374,7 @@ export function CompactTimeSlots({
                       </div>
 
                       {/* Имя менеджера (только для не-менеджеров при просмотре всех) */}
-                      {user?.role !== 'manager' && selectedManagerId === 'all' && (
+                      {!isManager && selectedManagerId === 'all' && (
                         <div className="time-slots-slot-manager">
                           <User className="w-3 h-3" />
                           <span>{slot.managerName}</span>
@@ -367,12 +386,9 @@ export function CompactTimeSlots({
               </div>
 
               {/* Кнопка добавления окошка для этого дня */}
-              {user?.role === 'manager' && (
+              {user && (
                 <button
-                  onClick={() => {
-                    setNewSlotDate(day);
-                    setIsAddingSlot(true);
-                  }}
+                  onClick={() => openSlotForm(day)}
                   className="time-slots-add-day"
                 >
                   <Plus className="w-4 h-4 inline mr-1" />
@@ -391,6 +407,23 @@ export function CompactTimeSlots({
             <h3 className="text-xl mb-4 text-[#2D1B69]">Добавить окошко</h3>
             
             <div className="space-y-4 mb-6">
+              {canManageTeamSlots && availableSlotOwners.length > 0 && (
+                <div>
+                  <Label htmlFor="slot-owner" className="mb-2 block">Добавить окошко для</Label>
+                  <select
+                    id="slot-owner"
+                    value={selectedSlotOwner.id}
+                    onChange={(event) => setSelectedSlotOwnerId(event.target.value)}
+                    className="time-slots-create-select"
+                  >
+                    {availableSlotOwners.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}{member.id === user?.id ? ' (я)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <Label className="mb-2 block">Дата</Label>
                 <Input

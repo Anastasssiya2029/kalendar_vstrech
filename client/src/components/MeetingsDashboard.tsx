@@ -77,6 +77,8 @@ type TelegramStatus = {
 };
 
 type DashboardView = 'clients' | 'calendar' | 'timeslots' | 'assistant' | 'meetings' | 'analytics' | 'users';
+type TeamRole = 'manager' | 'admin' | 'architect';
+type TeamMember = { id: string; name: string; email: string; role: TeamRole; createdAt: Date };
 
 function initialDashboardView(): DashboardView {
   if (typeof window === 'undefined') return 'clients';
@@ -93,7 +95,7 @@ export function MeetingsDashboard() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [managers, setManagers] = useState<Array<{ id: string; name: string; email: string; role: 'manager'; createdAt: Date }>>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   
   // UI State
@@ -138,9 +140,9 @@ export function MeetingsDashboard() {
         setMeetings((meetingsRes.meetings || []).map(normalizeMeeting));
         setTariffs(tariffsRes.tariffs || []);
         setTimeSlots((timeSlotsRes.timeSlots || []).map(normalizeTimeSlot));
-        setManagers((membersRes.members || [])
-          .filter((member: any) => member.role === 'manager')
-          .map((member: any) => ({ ...member, role: 'manager' as const, createdAt: new Date(member.createdAt) })));
+        setTeamMembers((membersRes.members || [])
+          .filter((member: any) => ['manager', 'admin', 'architect'].includes(member.role))
+          .map((member: any) => ({ ...member, createdAt: toLocalDate(member.createdAt) } as TeamMember)));
       } catch (error) {
         console.error('Error loading data:', error);
         toast.error('Не удалось загрузить данные');
@@ -153,14 +155,14 @@ export function MeetingsDashboard() {
   }, [school?.id, canManageUsers]);
 
   const refreshTelegramStatus = async () => {
-    if (user?.role !== 'manager' && user?.role !== 'architect') return;
+    if (user?.role !== 'manager' && user?.role !== 'admin' && user?.role !== 'architect') return;
     const result = await apiService.getTelegramStatus();
     setTelegramStatus(result.telegram);
     return result.telegram;
   };
 
   useEffect(() => {
-    if (user?.role !== 'manager' && user?.role !== 'architect') {
+    if (user?.role !== 'manager' && user?.role !== 'admin' && user?.role !== 'architect') {
       setTelegramStatus(undefined);
       return;
     }
@@ -853,29 +855,45 @@ export function MeetingsDashboard() {
     }
   };
 
-  const handleAddManager = async (manager: { name: string; email: string; password: string }) => {
+  const handleAddManager = async (member: { name: string; email: string; password: string; role: 'manager' | 'admin' }) => {
     if (!school?.id) return;
     try {
-      const result = await apiService.createUser({ ...manager, schoolId: school.id });
-      setManagers((current) => [...current, { ...result.user, role: 'manager', createdAt: new Date(result.user.createdAt) }]);
-      toast.success(`Менеджер ${manager.name} добавлен`);
+      const result = await apiService.createUser({ ...member, schoolId: school.id });
+      setTeamMembers((current) => [...current, {
+        ...result.user,
+        role: result.user.role as TeamRole,
+        createdAt: toLocalDate(result.user.createdAt),
+      }]);
+      toast.success(`${member.role === 'admin' ? 'Администратор' : 'Менеджер'} ${member.name} добавлен`);
     } catch (cause) {
       console.error('Error creating manager:', cause);
-      toast.error(cause instanceof Error ? cause.message : 'Не удалось добавить менеджера');
+      toast.error(cause instanceof Error ? cause.message : 'Не удалось добавить сотрудника');
     }
   };
 
-  const handleEditManager = async (managerId: string, manager: { name: string; email: string; password?: string }) => {
+  const handleEditManager = async (managerId: string, member: { name: string; email: string; password?: string; role?: 'manager' | 'admin' }) => {
     if (!school?.id) return;
     try {
-      const result = await apiService.updateUser(school.id, managerId, manager);
-      setManagers((current) => current.map((item) => item.id === managerId
-        ? { ...item, ...result.user, role: 'manager', createdAt: new Date(result.user.createdAt ?? item.createdAt) }
+      const result = await apiService.updateUser(school.id, managerId, member);
+      setTeamMembers((current) => current.map((item) => item.id === managerId
+        ? { ...item, ...result.user, role: result.user.role as TeamRole, createdAt: toLocalDate(result.user.createdAt ?? item.createdAt) }
         : item));
-      toast.success('Данные менеджера обновлены');
+      toast.success('Данные сотрудника обновлены');
     } catch (cause) {
       console.error('Error updating manager:', cause);
-      toast.error(cause instanceof Error ? cause.message : 'Не удалось обновить менеджера');
+      toast.error(cause instanceof Error ? cause.message : 'Не удалось обновить сотрудника');
+    }
+  };
+
+  const handleDeleteManager = async (memberId: string) => {
+    if (!school?.id) return;
+    try {
+      await apiService.deleteUser(school.id, memberId);
+      setTeamMembers((current) => current.filter((member) => member.id !== memberId));
+      toast.success('Доступ сотрудника отключён');
+    } catch (cause) {
+      console.error('Error deleting manager:', cause);
+      toast.error(cause instanceof Error ? cause.message : 'Не удалось удалить сотрудника');
     }
   };
 
@@ -1096,6 +1114,7 @@ export function MeetingsDashboard() {
         ) : selectedView === 'timeslots' ? (
           <CompactTimeSlots
             slots={user?.role === 'manager' ? managerTimeSlots : timeSlots}
+            slotOwners={teamMembers}
             bookingStates={slotBookingStates}
             onAddSlot={handleAddTimeSlot}
             onDeleteSlot={handleDeleteTimeSlot}
@@ -1122,9 +1141,11 @@ export function MeetingsDashboard() {
           />
         ) : selectedView === 'users' && canManageUsers ? (
           <UserManagement
-            users={managers}
+            users={teamMembers.filter((member): member is TeamMember & { role: 'manager' | 'admin' } => member.role === 'manager' || member.role === 'admin')}
+            canManageAdministrators={user?.role === 'architect'}
             onAddUser={handleAddManager}
             onEditUser={handleEditManager}
+            onDeleteUser={handleDeleteManager}
           />
         ) : (
           <AssistantTimeSlotSelector

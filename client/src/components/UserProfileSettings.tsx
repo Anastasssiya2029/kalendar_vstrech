@@ -341,7 +341,7 @@ export function UserProfileSettings({
                 />
               </div>
 
-              {(user.role === 'manager' || user.role === 'architect') && (
+              {(user.role === 'manager' || user.role === 'admin' || user.role === 'architect') && (
                 <section className="rounded-2xl border border-[#e7d8e9] bg-[#fcf9fc] p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex gap-3">

@@ -748,9 +748,10 @@ export function Dashboard() {
           />
         ) : selectedView === 'users' ? (
           <UserManagement
-            users={schoolUsers}
-            onAddUser={handleAddUser}
-            onEditUser={handleEditUser}
+            users={schoolUsers.filter((member) => member.role === 'manager')}
+            canManageAdministrators={false}
+            onAddUser={(member) => handleAddUser({ ...member, role: 'manager' })}
+            onEditUser={(memberId, member) => handleEditUser(memberId, { ...member, role: 'manager' })}
             onDeleteUser={handleDeleteUser}
           />
         ) : (
