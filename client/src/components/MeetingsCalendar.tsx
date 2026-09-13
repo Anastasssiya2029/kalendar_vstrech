@@ -110,6 +110,11 @@ function CalendarMonthView({
               aria-label={hasMeetings ? `${day} ${getMonthName(month)}: ${hasMeetings ? sortedDayMeetings.length : 0} встреч` : `${day} ${getMonthName(month)}`}
             >
               <span className="calendar-period-day-number">{day}</span>
+              {hasMeetings && (
+                <span className="calendar-period-meeting-count" aria-hidden="true">
+                  {sortedDayMeetings.length}
+                </span>
+              )}
               {condensed ? (
                 <span className="calendar-period-dot-row" aria-hidden="true">
                   {sortedDayMeetings.slice(0, 3).map(meeting => {
@@ -423,8 +428,8 @@ export function MeetingsCalendar({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             {/* Проведено от запланированных */}
             <div className="calendar-conversion-metric calendar-conversion-metric--completed flex flex-col items-center">
-              <div className="relative w-20 h-20 mb-2">
-                <svg className="w-full h-full -rotate-90">
+              <div className="calendar-conversion-ring relative w-20 h-20 mb-2">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                   <circle
                     cx="40"
                     cy="40"
@@ -462,8 +467,8 @@ export function MeetingsCalendar({
 
             {/* С продажами от проведенных */}
             <div className="calendar-conversion-metric calendar-conversion-metric--sales flex flex-col items-center">
-              <div className="relative w-20 h-20 mb-2">
-                <svg className="w-full h-full -rotate-90">
+              <div className="calendar-conversion-ring relative w-20 h-20 mb-2">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                   <circle
                     cx="40"
                     cy="40"
@@ -501,8 +506,8 @@ export function MeetingsCalendar({
 
             {/* С продажами от запланированных */}
             <div className="calendar-conversion-metric calendar-conversion-metric--planned flex flex-col items-center">
-              <div className="relative w-20 h-20 mb-2">
-                <svg className="w-full h-full -rotate-90">
+              <div className="calendar-conversion-ring relative w-20 h-20 mb-2">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                   <circle
                     cx="40"
                     cy="40"
@@ -540,8 +545,8 @@ export function MeetingsCalendar({
 
             {/* Отмененных и перенесенных */}
             <div className="calendar-conversion-metric calendar-conversion-metric--cancelled flex flex-col items-center">
-              <div className="relative w-20 h-20 mb-2">
-                <svg className="w-full h-full -rotate-90">
+              <div className="calendar-conversion-ring relative w-20 h-20 mb-2">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                   <circle
                     cx="40"
                     cy="40"
