@@ -11,6 +11,7 @@ import {
   initializeTelegramIntegration,
   processTelegramWebhook,
   queueMeetingNotification,
+  queueTimeSlotCreatedNotification,
   recordMeetingActivity,
   recordSlotsOffered,
 } from "./telegram";
@@ -222,8 +223,14 @@ async function createEntity(req: Request, res: Response, entity: Entity) {
     `INSERT INTO ${entity} (${fields.join(", ")}) VALUES (${placeholders(1, fields.length)}) RETURNING *`,
     values,
   );
-  const created = result.rows[0] as { id: string; manager_id?: string; client_id?: string };
-  if (entity === "meetings" && created.manager_id && created.client_id) {
+  const created = result.rows[0] as { id: string; manager_id?: string; client_id?: string; rescheduled_from_meeting_id?: string | null };
+  if (entity === "time_slots" && created.manager_id) {
+    await queueTimeSlotCreatedNotification(
+      { id: created.id, manager_id: created.manager_id },
+      { id: user.id },
+    ).catch(() => undefined);
+  }
+  if (entity === "meetings" && created.manager_id && created.client_id && !created.rescheduled_from_meeting_id) {
     // Operational telemetry and external delivery never prevent a client from being booked.
     await recordMeetingActivity(schoolId, { id: created.id, manager_id: created.manager_id, client_id: created.client_id }, "meeting_booked").catch(() => undefined);
     await queueMeetingNotification({ id: created.id, manager_id: created.manager_id }, "booked").catch(() => undefined);

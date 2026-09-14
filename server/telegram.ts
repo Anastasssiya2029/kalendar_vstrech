@@ -23,16 +23,33 @@ type PendingNotification = {
   comment: string | null;
   date: string;
   start_time: string;
+  previous_date: string | null;
+  previous_start_time: string | null;
 };
 
-type SummaryTotals = {
+type PendingSlotNotification = {
+  id: number;
+  time_slot_id: string;
+  recipient_id: string;
+  chat_id: string | null;
+  school_name: string;
+  creator_name: string;
+  manager_name: string;
+  date: string;
+  start_time: string;
+};
+
+type OperationalTotals = {
+  slots_total: number;
+  slots_booked: number;
   slots_offered: number;
-  meetings_booked: number;
+  clients_booked: number;
+  meetings_completed: number;
   meetings_sold: number;
   meetings_rescheduled: number;
   meetings_cancelled: number;
 };
-type ManagerSummary = SummaryTotals & { manager_name: string };
+type ManagerOperationalSummary = OperationalTotals & { manager_name: string };
 type WeeklyPeriod = { start: string; end: string };
 
 let botIdentity: TelegramBot | null = null;
@@ -97,18 +114,36 @@ function conversion(numerator: number, denominator: number) {
   return denominator > 0 ? `${Math.round((numerator / denominator) * 100)}%` : "—";
 }
 
+function escapeTelegramHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 function notificationText(item: PendingNotification) {
   const clientName = [item.first_name, item.last_name].filter(Boolean).join(" ") || "Без имени";
   const eventTitle: Record<TelegramEventType, string> = {
-    booked: "📅 Новая запись на встречу",
-    cancelled: "⛔ Встреча отменена",
-    rescheduled: "↪️ Встреча перенесена",
+    booked: "📅 ВСТРЕЧА НАЗНАЧЕНА",
+    cancelled: "⛔ ВСТРЕЧА ОТМЕНЕНА",
+    rescheduled: "↪️ ВСТРЕЧА ПЕРЕНЕСЕНА",
   };
-  const lines = [eventTitle[item.event_type], ""];
-  if (item.recipient_role === "architect") lines.push(`Школа: ${item.school_name}`, `Менеджер: ${item.manager_name}`);
-  lines.push(`Клиент: ${clientName}`, `Дата: ${formatMeetingDate(item.date)}`, `Время: ${item.start_time}`);
-  if (item.username) lines.push(`Username: ${item.username.startsWith("@") ? item.username : `@${item.username}`}`);
-  if (item.comment) lines.push(`Комментарий: ${item.comment}`);
+  const lines = [`<b>${eventTitle[item.event_type]}</b>`, ""];
+  if (item.recipient_role === "architect") {
+    lines.push(`Школа: ${escapeTelegramHtml(item.school_name)}`, `Менеджер: ${escapeTelegramHtml(item.manager_name)}`);
+  }
+  lines.push(`Клиент: ${escapeTelegramHtml(clientName)}`);
+  if (item.username) {
+    const username = item.username.startsWith("@") ? item.username : `@${item.username}`;
+    lines.push(`Username: ${escapeTelegramHtml(username)}`);
+  }
+  if (item.event_type === "rescheduled" && item.previous_date && item.previous_start_time) {
+    lines.push(`Было: ${formatMeetingDate(item.previous_date)}, ${escapeTelegramHtml(item.previous_start_time)}`);
+    lines.push(`Стало: ${formatMeetingDate(item.date)}, ${escapeTelegramHtml(item.start_time)}`);
+  } else {
+    lines.push(`Дата: ${formatMeetingDate(item.date)}`, `Время: ${escapeTelegramHtml(item.start_time)}`);
+  }
+  if (item.comment) lines.push(`Комментарий: ${escapeTelegramHtml(item.comment)}`);
   return lines.join("\n");
 }
 
@@ -132,14 +167,20 @@ async function nextPendingNotification(): Promise<PendingNotification | null> {
       )
       SELECT claimed.id, claimed.meeting_id, claimed.manager_id, claimed.recipient_id, claimed.event_type,
         connection.chat_id::text, recipient.role AS recipient_role, school.name AS school_name,
-        manager.name AS manager_name, client.first_name, client.last_name, client.username, client.comment,
-        meeting.date::text, meeting.start_time
+        COALESCE(target_manager.name, manager.name) AS manager_name,
+        client.first_name, client.last_name, client.username, client.comment,
+        CASE WHEN claimed.event_type = 'rescheduled' THEN COALESCE(target.date, meeting.date)::text ELSE meeting.date::text END AS date,
+        CASE WHEN claimed.event_type = 'rescheduled' THEN COALESCE(target.start_time, meeting.start_time) ELSE meeting.start_time END AS start_time,
+        CASE WHEN claimed.event_type = 'rescheduled' THEN meeting.date::text ELSE NULL END AS previous_date,
+        CASE WHEN claimed.event_type = 'rescheduled' THEN meeting.start_time ELSE NULL END AS previous_start_time
       FROM claimed
       LEFT JOIN telegram_connections connection ON connection.user_id = claimed.recipient_id
       JOIN users recipient ON recipient.id = claimed.recipient_id
       JOIN meetings meeting ON meeting.id = claimed.meeting_id
+      LEFT JOIN meetings target ON target.id = meeting.rescheduled_to_meeting_id
       JOIN schools school ON school.id = meeting.school_id
       JOIN users manager ON manager.id = claimed.manager_id
+      LEFT JOIN users target_manager ON target_manager.id = target.manager_id
       JOIN clients client ON client.id = meeting.client_id
     `, [id]);
     const item = claimed.rows[0];
@@ -159,6 +200,7 @@ async function deliverNotification(item: PendingNotification) {
     await telegramApi("sendMessage", {
       chat_id: Number(item.chat_id),
       text: notificationText(item),
+      parse_mode: "HTML",
       reply_markup: { inline_keyboard: [[{ text: "Открыть календарь", url: `${appBaseUrl}/?tab=calendar` }]] },
     });
     await query("UPDATE telegram_notification_outbox SET delivered_at = now(), locked_until = NULL, last_error = NULL WHERE id = $1", [item.id]);
@@ -174,6 +216,104 @@ export async function deliverPendingTelegramNotifications() {
     if (!item) return;
     await deliverNotification(item);
   }
+}
+
+function slotNotificationText(item: PendingSlotNotification) {
+  const lines = [
+    "<b>🗓 ДОБАВЛЕНО ОКОШКО</b>",
+    "",
+    `Школа: ${escapeTelegramHtml(item.school_name)}`,
+    `Добавил: ${escapeTelegramHtml(item.creator_name)}`,
+    `Для менеджера: ${escapeTelegramHtml(item.manager_name)}`,
+    `Дата: ${formatMeetingDate(item.date)}`,
+    `Время: ${escapeTelegramHtml(item.start_time)}`,
+  ];
+  return lines.join("\n");
+}
+
+async function nextPendingSlotNotification(): Promise<PendingSlotNotification | null> {
+  const candidates = await query<{ id: number }>(`
+    SELECT id FROM telegram_slot_notification_outbox
+    WHERE delivered_at IS NULL
+      AND attempts < 5
+      AND (locked_until IS NULL OR locked_until < now())
+      AND (last_attempt_at IS NULL OR last_attempt_at < now() - interval '1 minute')
+    ORDER BY created_at ASC
+    LIMIT 10
+  `);
+  for (const { id } of candidates.rows) {
+    const claimed = await query<PendingSlotNotification>(`
+      WITH claimed AS (
+        UPDATE telegram_slot_notification_outbox
+        SET attempts = attempts + 1, last_attempt_at = now(), locked_until = now() + interval '1 minute'
+        WHERE id = $1 AND delivered_at IS NULL AND (locked_until IS NULL OR locked_until < now())
+        RETURNING id, time_slot_id, creator_id, manager_id, recipient_id
+      )
+      SELECT claimed.id, claimed.time_slot_id, claimed.recipient_id,
+        connection.chat_id::text, school.name AS school_name,
+        creator.name AS creator_name, manager.name AS manager_name,
+        slot.date::text, slot.start_time
+      FROM claimed
+      LEFT JOIN telegram_connections connection ON connection.user_id = claimed.recipient_id
+      JOIN time_slots slot ON slot.id = claimed.time_slot_id
+      JOIN schools school ON school.id = slot.school_id
+      JOIN users creator ON creator.id = claimed.creator_id
+      JOIN users manager ON manager.id = claimed.manager_id
+    `, [id]);
+    const item = claimed.rows[0];
+    if (!item) continue;
+    if (!item.chat_id) {
+      await query("UPDATE telegram_slot_notification_outbox SET delivered_at = now(), locked_until = NULL WHERE id = $1", [item.id]);
+      continue;
+    }
+    return item;
+  }
+  return null;
+}
+
+async function deliverSlotNotification(item: PendingSlotNotification) {
+  try {
+    const { appBaseUrl } = config();
+    await telegramApi("sendMessage", {
+      chat_id: Number(item.chat_id),
+      text: slotNotificationText(item),
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [[{ text: "Открыть окошки", url: `${appBaseUrl}/?tab=timeslots` }]] },
+    });
+    await query("UPDATE telegram_slot_notification_outbox SET delivered_at = now(), locked_until = NULL, last_error = NULL WHERE id = $1", [item.id]);
+  } catch {
+    await query("UPDATE telegram_slot_notification_outbox SET locked_until = NULL, last_error = 'Не удалось отправить уведомление об окошке' WHERE id = $1", [item.id]);
+  }
+}
+
+export async function deliverPendingSlotNotifications() {
+  if (!isTelegramConfigured()) return;
+  for (let delivered = 0; delivered < 10; delivered += 1) {
+    const item = await nextPendingSlotNotification();
+    if (!item) return;
+    await deliverSlotNotification(item);
+  }
+}
+
+export async function queueTimeSlotCreatedNotification(
+  slot: { id: string; manager_id: string },
+  creator: { id: string },
+) {
+  if (!isTelegramConfigured()) return;
+  const recipients = await query<{ user_id: string }>(`
+    SELECT connection.user_id
+    FROM telegram_connections connection
+    JOIN users recipient ON recipient.id = connection.user_id
+    WHERE recipient.role = 'architect' AND recipient.is_active = true
+  `);
+  for (const recipient of recipients.rows) {
+    await query(`
+      INSERT INTO telegram_slot_notification_outbox (time_slot_id, creator_id, manager_id, recipient_id)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (time_slot_id, recipient_id) DO NOTHING
+    `, [slot.id, creator.id, slot.manager_id, recipient.user_id]);
+  }
+  void deliverPendingSlotNotifications().catch(() => undefined);
 }
 
 export async function recordSlotsOffered(schoolId: string, clientId: string, rawSlotIds: unknown) {
@@ -211,12 +351,23 @@ export async function queueMeetingNotification(
 ) {
   if (!isTelegramConfigured()) return;
   const recipients = await query<{ user_id: string }>(`
-    SELECT connection.user_id
+    SELECT DISTINCT connection.user_id
     FROM telegram_connections connection
     JOIN users recipient ON recipient.id = connection.user_id AND recipient.is_active = true
-    WHERE (connection.user_id = $1 AND recipient.role IN ('manager', 'admin', 'architect'))
-       OR recipient.role = 'architect'
-  `, [meeting.manager_id]);
+    WHERE (
+      recipient.role IN ('manager', 'admin', 'architect')
+      AND (
+        ($2 <> 'rescheduled' AND connection.user_id = $1)
+        OR ($2 = 'rescheduled' AND connection.user_id IN (
+          SELECT source.manager_id FROM meetings source WHERE source.id = $3
+          UNION
+          SELECT target.manager_id
+          FROM meetings source JOIN meetings target ON target.id = source.rescheduled_to_meeting_id
+          WHERE source.id = $3
+        ))
+      )
+    ) OR (recipient.role = 'architect' AND $2 <> 'booked')
+  `, [meeting.manager_id, eventType, meeting.id]);
   for (const recipient of recipients.rows) {
     await query(`
       INSERT INTO telegram_notification_outbox (meeting_id, manager_id, recipient_id, event_type)
@@ -283,68 +434,277 @@ export async function processTelegramWebhook(update: unknown, providedSecret: st
   return true;
 }
 
-function moscowWeeklyPeriod(): WeeklyPeriod | null {
+type MoscowClock = { date: string; weekday: string; hour: number };
+type DailyWindow = "morning" | "evening";
+
+function moscowClock(): MoscowClock {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Moscow", weekday: "short", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  if (get("weekday") !== "Sun" || Number(get("hour")) < 20) return null;
-  const today = new Date(Date.UTC(Number(get("year")), Number(get("month")) - 1, Number(get("day"))));
-  const monday = new Date(today);
-  monday.setUTCDate(today.getUTCDate() - 6);
-  return { start: monday.toISOString().slice(0, 10), end: today.toISOString().slice(0, 10) };
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    weekday: get("weekday"),
+    hour: Number(get("hour")),
+  };
+}
+
+function shiftDate(date: string, days: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return shifted.toISOString().slice(0, 10);
+}
+
+function weekContaining(date: string): WeeklyPeriod {
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const daysAfterMonday = (weekday + 6) % 7;
+  const start = shiftDate(date, -daysAfterMonday);
+  return { start, end: shiftDate(start, 6) };
+}
+
+function moscowDailyWindow(): { date: string; window: DailyWindow } | null {
+  const clock = moscowClock();
+  if (clock.hour === 9) return { date: clock.date, window: "morning" };
+  if (clock.hour === 20) return { date: clock.date, window: "evening" };
+  return null;
+}
+
+function moscowWeeklyPeriod(): WeeklyPeriod | null {
+  const clock = moscowClock();
+  if (clock.weekday !== "Sun" || clock.hour < 20) return null;
+  return weekContaining(clock.date);
 }
 
 function formatPeriod(period: WeeklyPeriod) {
   return `${formatMeetingDate(period.start)} — ${formatMeetingDate(period.end)}`;
 }
 
-async function weeklyMetrics(schoolId: string, period: WeeklyPeriod) {
-  const totals = await query<SummaryTotals>(`
-    SELECT
-      COALESCE(SUM(quantity) FILTER (WHERE event_type = 'slots_offered'), 0)::int AS slots_offered,
-      COUNT(*) FILTER (WHERE event_type = 'meeting_booked')::int AS meetings_booked,
-      COUNT(*) FILTER (WHERE event_type = 'meeting_sold')::int AS meetings_sold,
-      COUNT(*) FILTER (WHERE event_type = 'meeting_rescheduled')::int AS meetings_rescheduled,
-      COUNT(*) FILTER (WHERE event_type = 'meeting_cancelled')::int AS meetings_cancelled
-    FROM telegram_activity_events
-    WHERE school_id = $1 AND created_at >= $2::date AND created_at < now()
-  `, [schoolId, period.start]);
-  const managers = await query<ManagerSummary>(`
-    SELECT
-      user.name AS manager_name,
-      COALESCE(SUM(event.quantity) FILTER (WHERE event.event_type = 'slots_offered'), 0)::int AS slots_offered,
-      COUNT(event.id) FILTER (WHERE event.event_type = 'meeting_booked')::int AS meetings_booked,
-      COUNT(event.id) FILTER (WHERE event.event_type = 'meeting_sold')::int AS meetings_sold,
-      COUNT(event.id) FILTER (WHERE event.event_type = 'meeting_rescheduled')::int AS meetings_rescheduled,
-      COUNT(event.id) FILTER (WHERE event.event_type = 'meeting_cancelled')::int AS meetings_cancelled
-    FROM users user
-    LEFT JOIN telegram_activity_events event ON event.manager_id = user.id AND event.created_at >= $2::date AND event.created_at < now()
-    WHERE user.school_id = $1 AND user.role IN ('manager', 'admin', 'architect')
-    GROUP BY user.id, user.name
-    ORDER BY user.name ASC
-  `, [schoolId, period.start]);
-  return { totals: totals.rows[0] ?? { slots_offered: 0, meetings_booked: 0, meetings_sold: 0, meetings_rescheduled: 0, meetings_cancelled: 0 }, managers: managers.rows };
+const emptyOperationalTotals = (): OperationalTotals => ({
+  slots_total: 0,
+  slots_booked: 0,
+  slots_offered: 0,
+  clients_booked: 0,
+  meetings_completed: 0,
+  meetings_sold: 0,
+  meetings_rescheduled: 0,
+  meetings_cancelled: 0,
+});
+
+export async function operationalMetrics(schoolId: string, period: WeeklyPeriod) {
+  const totals = await query<OperationalTotals>(`
+    WITH slot_metrics AS (
+      SELECT COUNT(*)::int AS slots_total,
+        COUNT(*) FILTER (WHERE is_booked)::int AS slots_booked
+      FROM time_slots
+      WHERE school_id = $1 AND date BETWEEN $2::date AND $3::date
+    ), meeting_metrics AS (
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS meetings_completed,
+        COUNT(*) FILTER (WHERE status = 'completed_with_sale')::int AS meetings_sold,
+        COUNT(*) FILTER (WHERE status = 'rescheduled')::int AS meetings_rescheduled,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS meetings_cancelled
+      FROM meetings
+      WHERE school_id = $1 AND date BETWEEN $2::date AND $3::date
+    ), booking_metrics AS (
+      SELECT COUNT(*)::int AS clients_booked
+      FROM meetings
+      WHERE school_id = $1
+        AND rescheduled_from_meeting_id IS NULL
+        AND created_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Moscow')
+        AND created_at < (($3::date + 1)::timestamp AT TIME ZONE 'Europe/Moscow')
+    ), offered_metrics AS (
+      SELECT COALESCE(SUM(quantity) FILTER (WHERE event_type = 'slots_offered'), 0)::int AS slots_offered
+      FROM telegram_activity_events
+      WHERE school_id = $1
+        AND created_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Moscow')
+        AND created_at < (($3::date + 1)::timestamp AT TIME ZONE 'Europe/Moscow')
+    )
+    SELECT slot_metrics.slots_total, slot_metrics.slots_booked, offered_metrics.slots_offered,
+      booking_metrics.clients_booked, meeting_metrics.meetings_completed, meeting_metrics.meetings_sold,
+      meeting_metrics.meetings_rescheduled, meeting_metrics.meetings_cancelled
+    FROM slot_metrics, meeting_metrics, booking_metrics, offered_metrics
+  `, [schoolId, period.start, period.end]);
+
+  const managers = await query<ManagerOperationalSummary>(`
+    WITH slot_metrics AS (
+      SELECT manager_id, COUNT(*)::int AS slots_total,
+        COUNT(*) FILTER (WHERE is_booked)::int AS slots_booked
+      FROM time_slots
+      WHERE school_id = $1 AND date BETWEEN $2::date AND $3::date
+      GROUP BY manager_id
+    ), meeting_metrics AS (
+      SELECT manager_id,
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS meetings_completed,
+        COUNT(*) FILTER (WHERE status = 'completed_with_sale')::int AS meetings_sold,
+        COUNT(*) FILTER (WHERE status = 'rescheduled')::int AS meetings_rescheduled,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int AS meetings_cancelled
+      FROM meetings
+      WHERE school_id = $1 AND date BETWEEN $2::date AND $3::date
+      GROUP BY manager_id
+    ), booking_metrics AS (
+      SELECT manager_id, COUNT(*)::int AS clients_booked
+      FROM meetings
+      WHERE school_id = $1
+        AND rescheduled_from_meeting_id IS NULL
+        AND created_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Moscow')
+        AND created_at < (($3::date + 1)::timestamp AT TIME ZONE 'Europe/Moscow')
+      GROUP BY manager_id
+    ), offered_metrics AS (
+      SELECT manager_id, COALESCE(SUM(quantity) FILTER (WHERE event_type = 'slots_offered'), 0)::int AS slots_offered
+      FROM telegram_activity_events
+      WHERE school_id = $1
+        AND created_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Moscow')
+        AND created_at < (($3::date + 1)::timestamp AT TIME ZONE 'Europe/Moscow')
+      GROUP BY manager_id
+    )
+    SELECT employee.name AS manager_name,
+      COALESCE(slot_metrics.slots_total, 0)::int AS slots_total,
+      COALESCE(slot_metrics.slots_booked, 0)::int AS slots_booked,
+      COALESCE(offered_metrics.slots_offered, 0)::int AS slots_offered,
+      COALESCE(booking_metrics.clients_booked, 0)::int AS clients_booked,
+      COALESCE(meeting_metrics.meetings_completed, 0)::int AS meetings_completed,
+      COALESCE(meeting_metrics.meetings_sold, 0)::int AS meetings_sold,
+      COALESCE(meeting_metrics.meetings_rescheduled, 0)::int AS meetings_rescheduled,
+      COALESCE(meeting_metrics.meetings_cancelled, 0)::int AS meetings_cancelled
+    FROM users employee
+    LEFT JOIN slot_metrics ON slot_metrics.manager_id = employee.id
+    LEFT JOIN meeting_metrics ON meeting_metrics.manager_id = employee.id
+    LEFT JOIN booking_metrics ON booking_metrics.manager_id = employee.id
+    LEFT JOIN offered_metrics ON offered_metrics.manager_id = employee.id
+    WHERE employee.school_id = $1 AND employee.role IN ('manager', 'admin', 'architect') AND employee.is_active = true
+    ORDER BY employee.name ASC
+  `, [schoolId, period.start, period.end]);
+  return { totals: totals.rows[0] ?? emptyOperationalTotals(), managers: managers.rows };
 }
 
-function weeklySummaryText(schoolName: string, period: WeeklyPeriod, totals: SummaryTotals, managers: ManagerSummary[]) {
+function managerHasActivity(manager: ManagerOperationalSummary) {
+  return manager.slots_total + manager.slots_offered + manager.clients_booked + manager.meetings_completed
+    + manager.meetings_sold + manager.meetings_rescheduled + manager.meetings_cancelled > 0;
+}
+
+function managerSummaryLine(manager: ManagerOperationalSummary) {
+  return `• ${escapeTelegramHtml(manager.manager_name)}: окошек ${manager.slots_total}, занято ${manager.slots_booked}; записей ${manager.clients_booked}; проведено ${manager.meetings_completed}, с продажей ${manager.meetings_sold}; переносов ${manager.meetings_rescheduled}, отмен ${manager.meetings_cancelled}`;
+}
+
+function dailySummaryText(
+  schoolName: string,
+  date: string,
+  window: DailyWindow,
+  today: OperationalTotals,
+  todayManagers: ManagerOperationalSummary[],
+  week: OperationalTotals,
+  weekPeriod: WeeklyPeriod,
+) {
+  const title = window === "morning" ? "🌤 УТРЕННЯЯ СВОДКА" : "🌙 ВЕЧЕРНЯЯ СВОДКА";
+  const activeManagers = todayManagers.filter(managerHasActivity);
+  const conducted = week.meetings_completed + week.meetings_sold;
   const lines = [
-    "📊 Еженедельная сводка",
-    `Школа: ${schoolName}`,
+    `<b>${title}</b>`,
+    `Школа: ${escapeTelegramHtml(schoolName)}`,
+    `Дата: ${formatMeetingDate(date)}`,
+    "",
+    "<b>Сегодня</b>",
+    `• Окошек: ${today.slots_total} · занято: ${today.slots_booked}`,
+    `• Клиентов записано сегодня: ${today.clients_booked}`,
+    `• Проведено: ${today.meetings_completed} · с продажей: ${today.meetings_sold}`,
+    `• Перенесено: ${today.meetings_rescheduled} · отменено: ${today.meetings_cancelled}`,
+    "",
+    "<b>По менеджерам сегодня</b>",
+    ...(activeManagers.length > 0 ? activeManagers.map(managerSummaryLine) : ["• Окошек и встреч пока нет"]),
+    "",
+    `<b>Заполняемость недели</b> · ${formatPeriod(weekPeriod)}`,
+    `• Всего окошек: ${week.slots_total}`,
+    `• Заполнено: ${week.slots_booked} · ${conversion(week.slots_booked, week.slots_total)}`,
+    `• Предложено клиентам: ${week.slots_offered}`,
+    `• Записано клиентов: ${week.clients_booked}`,
+    `• Проведено: ${week.meetings_completed} · с продажей: ${week.meetings_sold}`,
+    `• Перенесено: ${week.meetings_rescheduled} · отменено: ${week.meetings_cancelled}`,
+    `• Конверсия проведённых в продажу: ${conversion(week.meetings_sold, conducted)}`,
+  ];
+  return lines.join("\n");
+}
+
+async function deliverDailySummary(
+  recipientId: string,
+  chatId: string,
+  schoolId: string,
+  schoolName: string,
+  date: string,
+  window: DailyWindow,
+) {
+  const claim = await query<{ id: number }>(`
+    INSERT INTO telegram_daily_summaries (recipient_id, school_id, report_date, report_window, attempts, last_attempt_at)
+    VALUES ($1, $2, $3::date, $4, 1, now())
+    ON CONFLICT (recipient_id, school_id, report_date, report_window) DO UPDATE
+      SET attempts = telegram_daily_summaries.attempts + 1, last_attempt_at = now(), last_error = NULL
+      WHERE telegram_daily_summaries.sent_at IS NULL
+        AND (telegram_daily_summaries.last_attempt_at IS NULL OR telegram_daily_summaries.last_attempt_at < now() - interval '5 minutes')
+    RETURNING id
+  `, [recipientId, schoolId, date, window]);
+  const summaryId = claim.rows[0]?.id;
+  if (!summaryId) return;
+  try {
+    const todayPeriod = { start: date, end: date };
+    const weekPeriod = weekContaining(date);
+    const [{ totals: today, managers }, { totals: week }] = await Promise.all([
+      operationalMetrics(schoolId, todayPeriod),
+      operationalMetrics(schoolId, weekPeriod),
+    ]);
+    await telegramApi("sendMessage", {
+      chat_id: Number(chatId),
+      text: dailySummaryText(schoolName, date, window, today, managers, week, weekPeriod),
+      parse_mode: "HTML",
+    });
+    await query("UPDATE telegram_daily_summaries SET sent_at = now(), last_error = NULL WHERE id = $1", [summaryId]);
+  } catch {
+    await query("UPDATE telegram_daily_summaries SET last_error = 'Не удалось отправить ежедневную сводку' WHERE id = $1", [summaryId]);
+  }
+}
+
+async function architectsAndSchools() {
+  const architects = await query<{ id: string; chat_id: string }>(`
+    SELECT employee.id, connection.chat_id::text
+    FROM users employee JOIN telegram_connections connection ON connection.user_id = employee.id
+    WHERE employee.role = 'architect' AND employee.is_active = true
+  `);
+  const schools = await query<{ id: string; name: string }>("SELECT id, name FROM schools ORDER BY name ASC");
+  return { architects: architects.rows, schools: schools.rows };
+}
+
+export async function deliverDailyTelegramSummaries() {
+  if (!isTelegramConfigured()) return;
+  const schedule = moscowDailyWindow();
+  if (!schedule) return;
+  const { architects, schools } = await architectsAndSchools();
+  for (const architect of architects) {
+    for (const school of schools) {
+      await deliverDailySummary(architect.id, architect.chat_id, school.id, school.name, schedule.date, schedule.window);
+    }
+  }
+}
+
+function weeklySummaryText(schoolName: string, period: WeeklyPeriod, totals: OperationalTotals, managers: ManagerOperationalSummary[]) {
+  const activeManagers = managers.filter(managerHasActivity);
+  const conducted = totals.meetings_completed + totals.meetings_sold;
+  const lines = [
+    "<b>📊 ЕЖЕНЕДЕЛЬНАЯ СВОДКА</b>",
+    `Школа: ${escapeTelegramHtml(schoolName)}`,
     `Период: ${formatPeriod(period)}`,
     "",
-    "Всего",
-    `• Выслано окошек: ${totals.slots_offered}`,
-    `• Записей на встречи: ${totals.meetings_booked} · конверсия ${conversion(totals.meetings_booked, totals.slots_offered)}`,
-    `• Продаж: ${totals.meetings_sold} · конверсия ${conversion(totals.meetings_sold, totals.meetings_booked)}`,
-    `• Переносов: ${totals.meetings_rescheduled} · отмен: ${totals.meetings_cancelled}`,
+    "<b>Итоги недели</b>",
+    `• Всего окошек: ${totals.slots_total}`,
+    `• Заполнено: ${totals.slots_booked} · ${conversion(totals.slots_booked, totals.slots_total)}`,
+    `• Предложено клиентам: ${totals.slots_offered}`,
+    `• Записано клиентов: ${totals.clients_booked}`,
+    `• Проведено: ${totals.meetings_completed} · с продажей: ${totals.meetings_sold}`,
+    `• Перенесено: ${totals.meetings_rescheduled} · отменено: ${totals.meetings_cancelled}`,
+    `• Конверсия записей во встречу: ${conversion(conducted, totals.clients_booked)}`,
+    `• Конверсия проведённых в продажу: ${conversion(totals.meetings_sold, conducted)}`,
     "",
-    "По менеджерам",
+    "<b>По менеджерам</b>",
+    ...(activeManagers.length > 0 ? activeManagers.map(managerSummaryLine) : ["• Данных за неделю пока нет"]),
   ];
-  if (managers.length === 0) lines.push("• Пока нет менеджеров");
-  for (const manager of managers) {
-    lines.push(`• ${manager.manager_name}: окошек ${manager.slots_offered}, встреч ${manager.meetings_booked} (${conversion(manager.meetings_booked, manager.slots_offered)}), продаж ${manager.meetings_sold} (${conversion(manager.meetings_sold, manager.meetings_booked)}), переносов ${manager.meetings_rescheduled}, отмен ${manager.meetings_cancelled}`);
-  }
   return lines.join("\n");
 }
 
@@ -361,8 +721,12 @@ async function deliverWeeklySummary(recipientId: string, chatId: string, schoolI
   const summaryId = claim.rows[0]?.id;
   if (!summaryId) return;
   try {
-    const { totals, managers } = await weeklyMetrics(schoolId, period);
-    await telegramApi("sendMessage", { chat_id: Number(chatId), text: weeklySummaryText(schoolName, period, totals, managers) });
+    const { totals, managers } = await operationalMetrics(schoolId, period);
+    await telegramApi("sendMessage", {
+      chat_id: Number(chatId),
+      text: weeklySummaryText(schoolName, period, totals, managers),
+      parse_mode: "HTML",
+    });
     await query("UPDATE telegram_weekly_summaries SET sent_at = now(), last_error = NULL WHERE id = $1", [summaryId]);
   } catch {
     await query("UPDATE telegram_weekly_summaries SET last_error = 'Не удалось отправить еженедельную сводку' WHERE id = $1", [summaryId]);
@@ -373,15 +737,9 @@ export async function deliverWeeklyTelegramSummaries() {
   if (!isTelegramConfigured()) return;
   const period = moscowWeeklyPeriod();
   if (!period) return;
-  const architects = await query<{ id: string; chat_id: string }>(`
-    SELECT user.id, connection.chat_id::text
-    FROM users user JOIN telegram_connections connection ON connection.user_id = user.id
-    WHERE user.role = 'architect' AND user.is_active = true
-  `);
-  if (architects.rows.length === 0) return;
-  const schools = await query<{ id: string; name: string }>("SELECT id, name FROM schools ORDER BY name ASC");
-  for (const architect of architects.rows) {
-    for (const school of schools.rows) await deliverWeeklySummary(architect.id, architect.chat_id, school.id, school.name, period);
+  const { architects, schools } = await architectsAndSchools();
+  for (const architect of architects) {
+    for (const school of schools) await deliverWeeklySummary(architect.id, architect.chat_id, school.id, school.name, period);
   }
 }
 
@@ -393,10 +751,14 @@ export async function initializeTelegramIntegration() {
   try {
     await configureWebhook();
     void deliverPendingTelegramNotifications().catch(() => undefined);
+    void deliverPendingSlotNotifications().catch(() => undefined);
+    void deliverDailyTelegramSummaries().catch(() => undefined);
     void deliverWeeklyTelegramSummaries().catch(() => undefined);
     if (!deliveryTimer) {
       deliveryTimer = setInterval(() => {
         void deliverPendingTelegramNotifications().catch(() => undefined);
+        void deliverPendingSlotNotifications().catch(() => undefined);
+        void deliverDailyTelegramSummaries().catch(() => undefined);
         void deliverWeeklyTelegramSummaries().catch(() => undefined);
       }, 10 * 60_000);
       deliveryTimer.unref();

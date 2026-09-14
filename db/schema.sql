@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS time_slots (
   is_booked BOOLEAN NOT NULL DEFAULT false,
   booking_id UUID REFERENCES meetings(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (manager_id, date, start_time)
 );
 
@@ -142,6 +143,21 @@ CREATE TABLE IF NOT EXISTS telegram_notification_outbox (
   last_error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS telegram_slot_notification_outbox (
+  id BIGSERIAL PRIMARY KEY,
+  time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
+  creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  manager_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  delivered_at TIMESTAMPTZ,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at TIMESTAMPTZ,
+  locked_until TIMESTAMPTZ,
+  last_error TEXT,
+  UNIQUE (time_slot_id, recipient_id)
+);
+
 -- Immutable operational events make the weekly architect summary auditable and
 -- avoid trying to reconstruct history from the current state of a client card.
 CREATE TABLE IF NOT EXISTS telegram_activity_events (
@@ -168,6 +184,19 @@ CREATE TABLE IF NOT EXISTS telegram_weekly_summaries (
   UNIQUE (recipient_id, school_id, period_end)
 );
 
+CREATE TABLE IF NOT EXISTS telegram_daily_summaries (
+  id BIGSERIAL PRIMARY KEY,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  report_date DATE NOT NULL,
+  report_window TEXT NOT NULL CHECK (report_window IN ('morning', 'evening')),
+  sent_at TIMESTAMPTZ,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at TIMESTAMPTZ,
+  last_error TEXT,
+  UNIQUE (recipient_id, school_id, report_date, report_window)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_school_role ON users(school_id, role);
 CREATE INDEX IF NOT EXISTS idx_clients_school_owner ON clients(school_id, owner_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_school_manager_date ON meetings(school_id, manager_id, date);
@@ -176,6 +205,8 @@ CREATE INDEX IF NOT EXISTS idx_tariffs_school ON tariffs(school_id);
 CREATE INDEX IF NOT EXISTS idx_payments_school_client ON payments(school_id, client_id);
 CREATE INDEX IF NOT EXISTS idx_telegram_link_tokens_expiry ON telegram_link_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_telegram_outbox_pending ON telegram_notification_outbox(created_at)
+  WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_telegram_slot_outbox_pending ON telegram_slot_notification_outbox(created_at)
   WHERE delivered_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_telegram_activity_school_date ON telegram_activity_events(school_id, created_at, manager_id);
 
@@ -195,5 +226,7 @@ DROP TRIGGER IF EXISTS set_clients_updated_at ON clients;
 CREATE TRIGGER set_clients_updated_at BEFORE UPDATE ON clients FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS set_meetings_updated_at ON meetings;
 CREATE TRIGGER set_meetings_updated_at BEFORE UPDATE ON meetings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS set_time_slots_updated_at ON time_slots;
+CREATE TRIGGER set_time_slots_updated_at BEFORE UPDATE ON time_slots FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS set_payments_updated_at ON payments;
 CREATE TRIGGER set_payments_updated_at BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION set_updated_at();
