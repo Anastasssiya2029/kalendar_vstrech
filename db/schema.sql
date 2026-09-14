@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('architect', 'admin', 'manager')),
+  role TEXT NOT NULL CHECK (role IN ('architect', 'super_admin', 'admin', 'manager')),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

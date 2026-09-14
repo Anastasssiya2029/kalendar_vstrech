@@ -14,7 +14,7 @@ type PendingNotification = {
   recipient_id: string;
   event_type: TelegramEventType;
   chat_id: string | null;
-  recipient_role: "architect" | "manager" | "admin";
+  recipient_role: "architect" | "manager" | "admin" | "super_admin";
   school_name: string;
   manager_name: string;
   first_name: string;
@@ -366,7 +366,7 @@ export async function queueMeetingNotification(
     FROM telegram_connections connection
     JOIN users recipient ON recipient.id = connection.user_id AND recipient.is_active = true
     WHERE (
-      recipient.role IN ('manager', 'admin', 'architect')
+      recipient.role IN ('manager', 'admin', 'super_admin', 'architect')
       AND (
         ($2 <> 'rescheduled' AND connection.user_id = $1)
         OR ($2 = 'rescheduled' AND connection.user_id IN (
@@ -583,7 +583,7 @@ export async function operationalMetrics(schoolId: string, period: WeeklyPeriod)
     LEFT JOIN meeting_metrics ON meeting_metrics.manager_id = employee.id
     LEFT JOIN booking_metrics ON booking_metrics.manager_id = employee.id
     LEFT JOIN offered_metrics ON offered_metrics.manager_id = employee.id
-    WHERE employee.school_id = $1 AND employee.role IN ('manager', 'admin', 'architect') AND employee.is_active = true
+    WHERE employee.school_id = $1 AND employee.role IN ('manager', 'admin', 'super_admin', 'architect') AND employee.is_active = true
     ORDER BY employee.name ASC
   `, [schoolId, period.start, period.end]);
   return { totals: totals.rows[0] ?? emptyOperationalTotals(), managers: managers.rows };

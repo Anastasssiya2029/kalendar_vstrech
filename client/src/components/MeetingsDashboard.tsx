@@ -77,7 +77,7 @@ type TelegramStatus = {
 };
 
 type DashboardView = 'clients' | 'calendar' | 'timeslots' | 'assistant' | 'meetings' | 'analytics' | 'users';
-type TeamRole = 'manager' | 'admin' | 'architect';
+type TeamRole = 'manager' | 'admin' | 'super_admin' | 'architect';
 type TeamMember = { id: string; name: string; email: string; role: TeamRole; createdAt: Date };
 
 function initialDashboardView(): DashboardView {
@@ -89,8 +89,8 @@ function initialDashboardView(): DashboardView {
 
 export function MeetingsDashboard() {
   const { user, school, schools, isSchoolsDirectory, selectSchool, createSchool, updateSchool, updateProfile } = useAuth();
-  const canManageUsers = user?.role === 'admin' || user?.role === 'architect';
-  const canDeleteClients = user?.role === 'admin' || user?.role === 'architect';
+  const canManageUsers = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'architect';
+  const canDeleteClients = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'architect';
   
   const [clients, setClients] = useState<Client[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -142,7 +142,7 @@ export function MeetingsDashboard() {
         setTariffs(tariffsRes.tariffs || []);
         setTimeSlots((timeSlotsRes.timeSlots || []).map(normalizeTimeSlot));
         setTeamMembers((membersRes.members || [])
-          .filter((member: any) => ['manager', 'admin', 'architect'].includes(member.role))
+          .filter((member: any) => ['manager', 'admin', 'super_admin', 'architect'].includes(member.role))
           .map((member: any) => ({ ...member, createdAt: toLocalDate(member.createdAt) } as TeamMember)));
       } catch (error) {
         console.error('Error loading data:', error);
@@ -156,14 +156,14 @@ export function MeetingsDashboard() {
   }, [school?.id, canManageUsers]);
 
   const refreshTelegramStatus = async () => {
-    if (user?.role !== 'manager' && user?.role !== 'admin' && user?.role !== 'architect') return;
+    if (user?.role !== 'manager' && user?.role !== 'admin' && user?.role !== 'super_admin' && user?.role !== 'architect') return;
     const result = await apiService.getTelegramStatus();
     setTelegramStatus(result.telegram);
     return result.telegram;
   };
 
   useEffect(() => {
-    if (user?.role !== 'manager' && user?.role !== 'admin' && user?.role !== 'architect') {
+    if (user?.role !== 'manager' && user?.role !== 'admin' && user?.role !== 'super_admin' && user?.role !== 'architect') {
       setTelegramStatus(undefined);
       return;
     }
@@ -883,7 +883,7 @@ export function MeetingsDashboard() {
     }
   };
 
-  const handleAddManager = async (member: { name: string; email: string; password: string; role: 'manager' | 'admin' }) => {
+  const handleAddManager = async (member: { name: string; email: string; password: string; role: 'manager' | 'admin' | 'super_admin' }) => {
     if (!school?.id) return;
     try {
       const result = await apiService.createUser({ ...member, schoolId: school.id });
@@ -892,14 +892,15 @@ export function MeetingsDashboard() {
         role: result.user.role as TeamRole,
         createdAt: toLocalDate(result.user.createdAt),
       }]);
-      toast.success(`${member.role === 'admin' ? 'Администратор' : 'Менеджер'} ${member.name} добавлен`);
+      const roleLabel = member.role === 'super_admin' ? 'Супер-администратор' : member.role === 'admin' ? 'Администратор' : 'Менеджер';
+      toast.success(`${roleLabel} ${member.name} добавлен`);
     } catch (cause) {
       console.error('Error creating manager:', cause);
       toast.error(cause instanceof Error ? cause.message : 'Не удалось добавить сотрудника');
     }
   };
 
-  const handleEditManager = async (managerId: string, member: { name: string; email: string; password?: string; role?: 'manager' | 'admin' }) => {
+  const handleEditManager = async (managerId: string, member: { name: string; email: string; password?: string; role?: 'manager' | 'admin' | 'super_admin' }) => {
     if (!school?.id) return;
     try {
       const result = await apiService.updateUser(school.id, managerId, member);
@@ -1083,7 +1084,7 @@ export function MeetingsDashboard() {
               </button>
 
               {/* Аналитика - для архитектора и админа */}
-              {(user?.role === 'architect' || user?.role === 'admin') && (
+              {(user?.role === 'architect' || user?.role === 'super_admin' || user?.role === 'admin') && (
                 <button
                   type="button"
                   onClick={() => setSelectedView('analytics')}
@@ -1170,8 +1171,9 @@ export function MeetingsDashboard() {
           />
         ) : selectedView === 'users' && canManageUsers ? (
           <UserManagement
-            users={teamMembers.filter((member): member is TeamMember & { role: 'manager' | 'admin' } => member.role === 'manager' || member.role === 'admin')}
-            canManageAdministrators={user?.role === 'architect'}
+            users={teamMembers.filter((member): member is TeamMember & { role: 'manager' | 'admin' | 'super_admin' } => member.role === 'manager' || member.role === 'admin' || member.role === 'super_admin')}
+            canManageAdministrators={user?.role === 'super_admin' || user?.role === 'architect'}
+            canManageSuperAdministrators={user?.role === 'architect'}
             onAddUser={handleAddManager}
             onEditUser={handleEditManager}
             onDeleteUser={handleDeleteManager}

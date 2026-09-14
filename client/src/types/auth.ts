@@ -1,6 +1,6 @@
 // Only admin and manager accounts are issued by this deployment. The legacy values
 // remain in the type while old, unmounted components are being retained for history.
-export type UserRole = 'architect' | 'admin' | 'manager' | 'assistant';
+export type UserRole = 'architect' | 'super_admin' | 'admin' | 'manager' | 'assistant';
 
 export interface School {
   id: string;

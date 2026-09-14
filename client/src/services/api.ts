@@ -247,14 +247,14 @@ class ApiService {
     return this.request<{ members: any[] }>(this.schoolPath(schoolId, "users"));
   }
 
-  async createUser(userData: { email: string; name: string; schoolId: string; password: string; role: 'manager' | 'admin' }) {
+  async createUser(userData: { email: string; name: string; schoolId: string; password: string; role: 'manager' | 'admin' | 'super_admin' }) {
     return this.request<{ user: any }>(this.schoolPath(userData.schoolId, "users"), {
       method: "POST",
       body: JSON.stringify({ email: userData.email, name: userData.name, password: userData.password, role: userData.role }),
     });
   }
 
-  async updateUser(schoolId: string, userId: string, data: { name?: string; email?: string; password?: string; role?: 'manager' | 'admin' }) {
+  async updateUser(schoolId: string, userId: string, data: { name?: string; email?: string; password?: string; role?: 'manager' | 'admin' | 'super_admin' }) {
     return this.request<{ user: any }>(this.schoolPath(schoolId, `users/${encodeURIComponent(userId)}`), {
       method: "PATCH",
       body: JSON.stringify(data),

@@ -22,12 +22,12 @@ declare module "express-session" {
   }
 }
 
-type Role = "architect" | "admin" | "manager";
+type Role = "architect" | "super_admin" | "admin" | "manager";
 type AuthUser = { id: string; email: string; name: string; role: Role; school_id: string };
 type Entity = "clients" | "meetings" | "time_slots" | "tariffs" | "payments";
 
-function isOperativeRole(value: unknown): value is "manager" | "admin" {
-  return value === "manager" || value === "admin";
+function isSchoolRole(value: unknown): value is "manager" | "admin" | "super_admin" {
+  return value === "manager" || value === "admin" || value === "super_admin";
 }
 
 const entityConfig: Record<Entity, { fields: readonly string[]; orderBy: string; adminOnly?: boolean }> = {
@@ -60,11 +60,24 @@ function camelize(value: unknown): unknown {
 }
 
 function isAdmin(user: AuthUser) {
-  return user.role === "admin" || user.role === "architect";
+  return user.role === "admin" || user.role === "super_admin" || user.role === "architect";
 }
 
 function canUseTelegram(user: AuthUser) {
-  return user.role === "manager" || user.role === "admin" || user.role === "architect";
+  return user.role === "manager" || user.role === "admin" || user.role === "super_admin" || user.role === "architect";
+}
+
+function canAssignRole(actor: AuthUser, role: "manager" | "admin" | "super_admin") {
+  if (actor.role === "architect") return true;
+  if (actor.role === "super_admin") return role === "manager" || role === "admin";
+  return actor.role === "admin" && role === "manager";
+}
+
+function canManageMember(actor: AuthUser, targetRole: Role) {
+  if (targetRole === "architect") return false;
+  if (actor.role === "architect") return true;
+  if (actor.role === "super_admin") return targetRole === "manager" || targetRole === "admin";
+  return actor.role === "admin" && targetRole === "manager";
 }
 
 function publicUser(user: AuthUser) {
@@ -179,7 +192,7 @@ async function enforceManagerReference(schoolId: string, managerId: unknown) {
     `SELECT id, name FROM users
      WHERE id = $1
        AND is_active = true
-       AND role IN ('manager', 'admin', 'architect')
+       AND role IN ('manager', 'admin', 'super_admin', 'architect')
        AND (school_id = $2 OR role = 'architect')`,
     [managerId, schoolId],
   );
@@ -622,7 +635,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `SELECT id, email, name, role, school_id, is_active, created_at, updated_at FROM users
          WHERE school_id = $1
            AND is_active = true
-           ${managersOnly ? "AND role IN ('manager', 'admin')" : ""}
+            ${managersOnly ? "AND role IN ('manager', 'admin', 'super_admin')" : ""}
          ORDER BY name ASC`, [schoolId],
       );
       return res.json({ [managersOnly ? "managers" : "members"]: result.rows.map(camelize) });
@@ -638,10 +651,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const password = typeof req.body?.password === "string" ? req.body.password : "";
       const role = req.body?.role ?? "manager";
       if (!email || !name || !password) throw error("Заполните имя, email и пароль");
-      if (!isOperativeRole(role)) throw error("Можно создать только менеджера или администратора");
-      if (role === "admin" && user.role !== "architect") {
-        return res.status(403).json({ message: "Назначать администраторов может только архитектор" });
-      }
+      if (!isSchoolRole(role)) throw error("Можно создать только менеджера, администратора или супер-администратора");
+      if (!canAssignRole(user, role)) return res.status(403).json({ message: "Недостаточно прав для назначения этой роли" });
       const passwordHash = await hashPassword(password);
       const result = await query<AuthUser>(
         "INSERT INTO users (email, name, password_hash, role, school_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, school_id, created_at",
@@ -662,19 +673,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         [targetId, schoolId],
       );
       const targetUser = target.rows[0];
-      if (!targetUser || targetUser.role === "architect") throw error("Сотрудник не найден", 404);
-      if (user.role === "admin" && targetUser.role !== "manager") {
-        return res.status(403).json({ message: "Администратор может изменять только менеджеров" });
-      }
+      if (!targetUser || !canManageMember(user, targetUser.role)) return res.status(403).json({ message: "Недостаточно прав для изменения этого сотрудника" });
 
       const data = readBody(req.body, ["name", "email", "password", "role"]);
       if (typeof data.email === "string") data.email = data.email.trim().toLowerCase();
       if (typeof data.password === "string") { data.password_hash = await hashPassword(data.password); delete data.password; }
       if (Object.prototype.hasOwnProperty.call(data, "role")) {
-        if (!isOperativeRole(data.role)) throw error("Можно назначить только роль менеджера или администратора");
-        if (user.role !== "architect") {
-          return res.status(403).json({ message: "Менять роль сотрудника может только архитектор" });
-        }
+        if (!isSchoolRole(data.role)) throw error("Можно назначить только роль менеджера, администратора или супер-администратора");
+        if (!canAssignRole(user, data.role)) return res.status(403).json({ message: "Недостаточно прав для назначения этой роли" });
       }
       if (Object.keys(data).length === 0) throw error("Нет данных для обновления");
       const fields = Object.keys(data);
@@ -682,7 +688,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       values.push(targetId, schoolId);
       const result = await query<AuthUser>(
         `UPDATE users SET ${fields.map((field, index) => `${field} = $${index + 1}`).join(", ")}
-         WHERE id = $${values.length - 1} AND school_id = $${values.length} AND role IN ('manager', 'admin')
+         WHERE id = $${values.length - 1} AND school_id = $${values.length} AND role IN ('manager', 'admin', 'super_admin')
          RETURNING id, email, name, role, school_id, created_at`, values,
       );
       if (!result.rows[0]) throw error("Сотрудник не найден", 404);
@@ -702,13 +708,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         [targetId, schoolId],
       );
       const targetUser = target.rows[0];
-      if (!targetUser || targetUser.role === "architect") throw error("Сотрудник не найден", 404);
-      if (user.role === "admin" && targetUser.role !== "manager") {
-        return res.status(403).json({ message: "Администратор может удалить только менеджера" });
-      }
+      if (!targetUser || !canManageMember(user, targetUser.role)) return res.status(403).json({ message: "Недостаточно прав для удаления этого сотрудника" });
       const result = await query(
         `UPDATE users SET is_active = false, updated_at = now()
-         WHERE id = $1 AND school_id = $2 AND role IN ('manager', 'admin')
+         WHERE id = $1 AND school_id = $2 AND role IN ('manager', 'admin', 'super_admin')
          RETURNING id`,
         [targetId, schoolId],
       );

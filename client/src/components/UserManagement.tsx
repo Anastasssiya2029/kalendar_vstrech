@@ -8,7 +8,7 @@ import { DialogDescription } from './ui/dialog';
 import { Plus, User, Mail, Shield, Trash2, Edit } from 'lucide-react';
 import { Badge } from './ui/badge';
 
-type ManagedRole = 'manager' | 'admin';
+type ManagedRole = 'manager' | 'admin' | 'super_admin';
 
 interface ManagedUser {
   id: string;
@@ -21,6 +21,7 @@ interface ManagedUser {
 interface UserManagementProps {
   users: ManagedUser[];
   canManageAdministrators: boolean;
+  canManageSuperAdministrators: boolean;
   onAddUser: (userData: { name: string; email: string; password: string; role: ManagedRole }) => void;
   onEditUser?: (userId: string, userData: { name: string; email: string; password?: string; role?: ManagedRole }) => void;
   onDeleteUser?: (userId: string) => void;
@@ -35,9 +36,13 @@ const roleCopy: Record<ManagedRole, { label: string; description: string }> = {
     label: 'Администратор',
     description: 'Ведёт свои встречи, видит календарь команды и управляет менеджерами.',
   },
+  super_admin: {
+    label: 'Супер-администратор',
+    description: 'Управляет всей командой школы и может назначать администраторов.',
+  },
 };
 
-export function UserManagement({ users, canManageAdministrators, onAddUser, onEditUser, onDeleteUser }: UserManagementProps) {
+export function UserManagement({ users, canManageAdministrators, canManageSuperAdministrators, onAddUser, onEditUser, onDeleteUser }: UserManagementProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
@@ -112,6 +117,12 @@ export function UserManagement({ users, canManageAdministrators, onAddUser, onEd
 
   const managersCount = users.filter((member) => member.role === 'manager').length;
   const adminsCount = users.filter((member) => member.role === 'admin').length;
+  const superAdminsCount = users.filter((member) => member.role === 'super_admin').length;
+  const canManageMember = (member: ManagedUser) => (
+    member.role === 'manager'
+    || (member.role === 'admin' && canManageAdministrators)
+    || (member.role === 'super_admin' && canManageSuperAdministrators)
+  );
 
   return (
     <div className="user-management space-y-4 sm:space-y-6">
@@ -148,6 +159,7 @@ export function UserManagement({ users, canManageAdministrators, onAddUser, onEd
                   <select id="user-role" value={role} onChange={(event) => setRole(event.target.value as ManagedRole)} className="manager-editor-input manager-editor-select">
                     <option value="manager">Менеджер</option>
                     <option value="admin">Администратор</option>
+                    {canManageSuperAdministrators && <option value="super_admin">Супер-администратор</option>}
                   </select>
                   <p className="manager-editor-hint">{roleCopy[role].description}</p>
                 </div>
@@ -195,7 +207,7 @@ export function UserManagement({ users, canManageAdministrators, onAddUser, onEd
               <p className="user-management-stat-value">{users.length}</p>
             </div>
           </div>
-          <p className="user-management-stat-detail">{managersCount} менедж. · {adminsCount} админ.</p>
+          <p className="user-management-stat-detail">{managersCount} менедж. · {adminsCount} админ. · {superAdminsCount} супер-админ.</p>
         </Card>
       </div>
 
@@ -204,7 +216,7 @@ export function UserManagement({ users, canManageAdministrators, onAddUser, onEd
           <Card key={member.id} className="user-management-card rounded-3xl">
             <div className="user-management-card-layout">
               <div className={`user-management-avatar user-management-avatar--${member.role}`}>
-                {member.role === 'admin' ? <Shield className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                {member.role === 'manager' ? <User className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
               </div>
               <div className="user-management-card-info">
                 <div className="user-management-card-title">
@@ -217,12 +229,12 @@ export function UserManagement({ users, canManageAdministrators, onAddUser, onEd
                 </div>
               </div>
               <div className="user-management-card-actions">
-                {onEditUser && (
+                {onEditUser && canManageMember(member) && (
                   <Button variant="ghost" size="sm" onClick={() => handleEditClick(member)} className="manager-card-action manager-card-action--edit" title={`Редактировать: ${member.name}`} aria-label={`Редактировать: ${member.name}`}>
                     <Edit className="w-4 h-4" />
                   </Button>
                 )}
-                {onDeleteUser && (member.role === 'manager' || canManageAdministrators) && (
+                {onDeleteUser && canManageMember(member) && (
                   <Button variant="ghost" size="sm" onClick={() => setPendingDeletion(member)} className="manager-card-action manager-card-action--delete" title={`Удалить: ${member.name}`} aria-label={`Удалить: ${member.name}`}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -257,6 +269,7 @@ export function UserManagement({ users, canManageAdministrators, onAddUser, onEd
                 <select id="edit-user-role" value={editRole} onChange={(event) => setEditRole(event.target.value as ManagedRole)} className="manager-editor-input manager-editor-select">
                   <option value="manager">Менеджер</option>
                   <option value="admin">Администратор</option>
+                  {canManageSuperAdministrators && <option value="super_admin">Супер-администратор</option>}
                 </select>
                 <p className="manager-editor-hint">{roleCopy[editRole].description}</p>
               </div>

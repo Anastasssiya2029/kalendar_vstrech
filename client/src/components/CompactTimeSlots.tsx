@@ -9,7 +9,7 @@ import { parseLocalDateInput } from '../utils/dateOnly';
 
 interface CompactTimeSlotsProps {
   slots: TimeSlot[];
-  slotOwners?: Array<{ id: string; name: string; role: 'manager' | 'admin' | 'architect' }>;
+  slotOwners?: Array<{ id: string; name: string; role: 'manager' | 'admin' | 'super_admin' | 'architect' }>;
   bookingStates?: Record<string, { meetingStatus: MeetingStatus; formCompleted: boolean }>;
   onAddSlot: (slot: Omit<TimeSlot, 'id'>) => void;
   onDeleteSlot: (slotId: string) => void;
@@ -124,7 +124,7 @@ export function CompactTimeSlots({
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
-  const canManageTeamSlots = user?.role === 'admin' || user?.role === 'architect';
+  const canManageTeamSlots = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'architect';
   const isManager = user?.role === 'manager';
 
   // The assignment list includes team members even before they create their first slot.

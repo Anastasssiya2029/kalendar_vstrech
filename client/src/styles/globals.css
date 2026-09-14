@@ -4653,6 +4653,13 @@ table tr {
   border-color: #dec7e2;
 }
 
+.user-management-avatar--super_admin {
+  color: #fff;
+  background: linear-gradient(145deg, #5a246f, #a44386);
+  border-color: #7b3b8c;
+  box-shadow: 0 7px 16px rgba(94, 34, 111, 0.18);
+}
+
 .user-management-card-info {
   min-width: 0;
   padding-top: 0.1rem;
@@ -4725,6 +4732,12 @@ table tr {
   color: #6d3269 !important;
   background: #f3e8f3 !important;
   border-color: #ddc5df !important;
+}
+
+.manager-role-badge--super_admin {
+  color: #fff !important;
+  background: linear-gradient(135deg, #633078, #9d4082) !important;
+  border-color: transparent !important;
 }
 
 .manager-editor-select,

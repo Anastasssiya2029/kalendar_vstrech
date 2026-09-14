@@ -178,7 +178,7 @@ export function UserProfileSettings({
   const tabs = [
     { id: 'profile', label: 'Профиль', icon: User },
     { id: 'security', label: 'Безопасность', icon: Shield },
-    ...(user.role === 'admin' ? [{ id: 'service', label: 'Настройки сервиса', icon: SettingsIcon }] : []),
+    ...(['admin', 'super_admin'].includes(user.role) ? [{ id: 'service', label: 'Настройки сервиса', icon: SettingsIcon }] : []),
   ] as const;
 
   // Функции для работы с тарифами
@@ -275,7 +275,7 @@ export function UserProfileSettings({
               </div>
               <div className="min-w-0">
                 <h2>Настройки профиля</h2>
-                <p className="text-sm text-gray-600">{user.name} • {user.role === 'architect' ? 'Архитектор' : user.role === 'manager' ? 'Менеджер' : user.role === 'assistant' ? 'Помощник' : 'Администратор'}</p>
+                <p className="text-sm text-gray-600">{user.name} • {user.role === 'architect' ? 'Архитектор' : user.role === 'super_admin' ? 'Супер-администратор' : user.role === 'manager' ? 'Менеджер' : user.role === 'assistant' ? 'Помощник' : 'Администратор'}</p>
               </div>
             </div>
             <button
@@ -341,7 +341,7 @@ export function UserProfileSettings({
                 />
               </div>
 
-              {(user.role === 'manager' || user.role === 'admin' || user.role === 'architect') && (
+              {(user.role === 'manager' || user.role === 'admin' || user.role === 'super_admin' || user.role === 'architect') && (
                 <section className="rounded-2xl border border-[#e7d8e9] bg-[#fcf9fc] p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex gap-3">
@@ -448,7 +448,7 @@ export function UserProfileSettings({
             </div>
           )}
 
-          {activeTab === 'service' && user.role === 'admin' && (
+          {activeTab === 'service' && (user.role === 'admin' || user.role === 'super_admin') && (
             <div className="space-y-6">
               {/* Управление тарифами */}
               <div>

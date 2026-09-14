@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 
 const ROLE_LABELS = {
   architect: { label: 'Архитектор', icon: Shield, color: 'from-[#421f54] via-[#6f2e89] to-[#b52a98]' },
+  super_admin: { label: 'Супер-администратор', icon: Shield, color: 'from-[#522064] via-[#7e347f] to-[#b24b88]' },
   admin: { label: 'Администратор', icon: Shield, color: 'from-[#5d286f] to-[#924373]' },
   manager: { label: 'Менеджер', icon: User, color: 'from-[#683489] to-[#8a2f98]' },
   assistant: { label: 'Помощник', icon: User, color: 'from-[#4f164b] to-[#772559]' },
