@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Calendar as CalendarIcon, Clock, Trash2, Plus, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { parseLocalDateInput } from '../utils/dateOnly';
 
 interface CompactTimeSlotsProps {
   slots: TimeSlot[];
@@ -429,7 +430,7 @@ export function CompactTimeSlots({
                 <Input
                   type="date"
                   value={newSlotDate ? formatDateForInput(newSlotDate) : ''}
-                  onChange={(e) => setNewSlotDate(e.target.value ? new Date(e.target.value) : null)}
+                  onChange={(e) => setNewSlotDate(e.target.value ? parseLocalDateInput(e.target.value) ?? null : null)}
                   className="rounded-xl border-2 border-gray-200 focus:border-purple-500"
                 />
               </div>

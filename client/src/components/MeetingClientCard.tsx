@@ -100,9 +100,9 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
               </div>
               <div className="meeting-client-card-meta flex items-center gap-2 mt-1">
                 <span className="text-sm text-gray-600">{client.username}</span>
-                <span 
-                  className="px-2 py-0.5 rounded-full text-xs font-semibold text-white opacity-80"
-                  style={{ backgroundColor: statusColor }}
+                <span
+                  className={`meeting-client-status-badge ${client.status === 'selecting_time' ? 'is-neutral' : ''}`}
+                  style={client.status === 'selecting_time' ? undefined : { backgroundColor: statusColor }}
                 >
                   {statusText}
                 </span>

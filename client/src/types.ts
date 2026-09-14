@@ -4,10 +4,10 @@
 
 // Статус клиента в процессе записи
 export type ClientStatus = 
-  | 'selecting_time'       // 🟡 Выбор времени (желтый)
+  | 'selecting_time'       // Выбор времени (нейтральный, без цветовой кодировки)
   | 'scheduled'            // ⚪ Записан на встречу (серый)
   | 'ready'                // Внутренний признак: анкета заполнена
-  | 'completed'            // 🟢 Встреча проведена (зелёный)
+  | 'completed'            // 🟠 Встреча проведена (оранжевый)
   | 'completed_with_sale'  // 🟣 Встреча с продажей (фиолетовый)
   | 'cancelled';           // 🔴 Встреча отменена (красный)
 
@@ -15,7 +15,7 @@ export type ClientStatus =
 export type MeetingStatus =
   | 'scheduled'         // 🔘 Записан (серый)
   | 'scheduled_ready'   // Внутренний признак: анкета заполнена
-  | 'completed'         // 🟢 Проведена (зелёный)
+  | 'completed'         // 🟠 Проведена (оранжевый)
   | 'completed_with_sale' // 🟣 С продажей (фиолетовый)
   | 'cancelled'         // 🔴 Отменена (красный)
   | 'rescheduled';      // 🔵 🙏 Перенесена (голубой)
@@ -323,10 +323,10 @@ export const formatClientName = (client: Client): string => {
 // Функция получения цвета статуса клиента
 export const getClientStatusColor = (status: ClientStatus): string => {
   switch (status) {
-    case 'selecting_time': return '#FBBF24'; // Желтый (yellow-500)
+    case 'selecting_time': return '#8A818D'; // Нейтральный — без статусной заливки
     case 'scheduled': return '#A1A1AA';      // Более мягкий серый (zinc-400)
-    case 'ready': return '#A1A1AA';          // Не отдельный публичный статус
-    case 'completed': return '#2F9E63';      // Зелёный — проведена
+    case 'ready': return '#2F9E63';          // Зелёный — анкета заполнена
+    case 'completed': return '#D47D32';      // Оранжевый — проведена
     case 'completed_with_sale': return '#6F2E89'; // Фиолетовый — с продажей
     case 'cancelled': return '#D44B66'; // Красный
     default: return '#A1A1AA';
@@ -337,8 +337,8 @@ export const getClientStatusColor = (status: ClientStatus): string => {
 export const getMeetingStatusColor = (status: MeetingStatus): string => {
   switch (status) {
     case 'scheduled': return '#9CA3AF';           // Серый - Записан
-    case 'scheduled_ready': return '#9CA3AF';     // Серый — записан, анкета заполнена
-    case 'completed': return '#2F9E63';           // Зелёный — проведена
+    case 'scheduled_ready': return '#2F9E63';     // Зелёный — анкета заполнена
+    case 'completed': return '#D47D32';           // Оранжевый — проведена
     case 'completed_with_sale': return '#6F2E89'; // Фиолетовый — с продажей
     case 'cancelled': return '#D44B66';           // Красный — отменена
     case 'rescheduled': return '#3B82F6';         // Синий — перенесена

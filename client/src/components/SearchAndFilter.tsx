@@ -61,9 +61,9 @@ export function SearchAndFilter({ clients, onFilteredClientsChange }: SearchAndF
   const hasActiveFilters = searchQuery.trim() !== '' || statusFilter.length > 0 || formCompletedFilter !== 'all';
 
   const statuses = [
-    { id: 'selecting_time', label: 'Подбирает время', icon: Clock, color: 'from-yellow-500 to-orange-500' },
-    { id: 'scheduled', label: 'Записан', icon: Calendar, color: 'from-blue-500 to-cyan-500' },
-    { id: 'completed', label: 'Встреча проведена', icon: CheckCircle, color: 'from-green-500 to-emerald-500' },
+    { id: 'selecting_time', label: 'Подбирает время', icon: Clock, color: 'from-gray-100 to-gray-200' },
+    { id: 'scheduled', label: 'Записан', icon: Calendar, color: 'from-gray-400 to-gray-500' },
+    { id: 'completed', label: 'Встреча проведена', icon: CheckCircle, color: 'from-orange-500 to-amber-500' },
     { id: 'completed_with_sale', label: 'Встреча с продажей', icon: CheckCircle, color: 'from-purple-500 to-pink-500' },
   ];
 
@@ -135,7 +135,7 @@ export function SearchAndFilter({ clients, onFilteredClientsChange }: SearchAndF
                     onClick={() => toggleStatusFilter(status.id)}
                     className={`px-3 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
                       isActive
-                        ? `bg-gradient-to-r ${status.color} text-white shadow-lg`
+                        ? `bg-gradient-to-r ${status.color} ${status.id === 'selecting_time' ? 'text-gray-700 ring-1 ring-gray-200' : 'text-white'} shadow-lg`
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >

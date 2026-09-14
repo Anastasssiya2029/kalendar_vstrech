@@ -77,14 +77,25 @@ function hasValidWebhookSecret(value: string | undefined) {
 async function telegramApi<T>(method: string, payload: Record<string, unknown>): Promise<T> {
   const { token } = config();
   if (!token) throw new Error("Telegram is not configured");
-  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const body = await response.json().catch(() => ({})) as TelegramApiResponse<T>;
-  if (!response.ok || !body.ok || body.result === undefined) throw new Error(body.description || "Telegram API request failed");
-  return body.result;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => ({})) as TelegramApiResponse<T>;
+      if (!response.ok || !body.ok || body.result === undefined) throw new Error(body.description || "Telegram API request failed");
+      return body.result;
+    } catch (cause) {
+      lastError = cause;
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 350));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Telegram API request failed");
 }
 
 async function getBotIdentity() {

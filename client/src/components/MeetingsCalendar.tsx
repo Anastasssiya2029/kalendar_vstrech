@@ -452,8 +452,8 @@ export function MeetingsCalendar({
                   />
                   <defs>
                     <linearGradient id="gradient-completed" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#2F9E63" />
-                      <stop offset="100%" stopColor="#5CCB89" />
+                      <stop offset="0%" stopColor="#C96C29" />
+                      <stop offset="100%" stopColor="#E9A05B" />
                     </linearGradient>
                   </defs>
                 </svg>

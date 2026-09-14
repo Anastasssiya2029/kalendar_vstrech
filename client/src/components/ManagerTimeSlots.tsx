@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Calendar as CalendarIcon, Clock, Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { parseLocalDateInput } from '../utils/dateOnly';
 
 interface ManagerTimeSlotsProps {
   managerId: string;
@@ -151,7 +152,7 @@ export function ManagerTimeSlots({
                 id="date"
                 type="date"
                 value={selectedDate ? formatDateForInput(selectedDate) : ''}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                onChange={(e) => setSelectedDate(parseLocalDateInput(e.target.value))}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>

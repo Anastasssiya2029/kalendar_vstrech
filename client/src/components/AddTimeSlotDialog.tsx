@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useAuth } from '../contexts/AuthContext';
+import { parseLocalDateInput } from '../utils/dateOnly';
 
 interface AddTimeSlotDialogProps {
   open: boolean;
@@ -73,13 +74,15 @@ export function AddTimeSlotDialog({
 
   const handleSubmit = () => {
     if (!selectedDate || !selectedTime) return;
+    const date = parseLocalDateInput(selectedDate);
+    if (!date) return;
 
     const managerName = managers.find(m => m.id === selectedManagerId)?.name || user?.name || '';
 
     const slot: Omit<TimeSlot, 'id'> = {
       managerId: selectedManagerId,
       managerName: managerName,
-      date: new Date(selectedDate),
+      date,
       startTime: selectedTime,
       isBooked: false,
       schoolId: schoolId

@@ -6,6 +6,7 @@ import { Textarea } from './ui/textarea';
 import { Calendar, CalendarDays, Clock, User, Copy, CheckCircle, Filter as FilterIcon, Search, Minus, ChevronDown, Sun, CloudSun, Moon, ClipboardList, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '../utils/clipboard';
+import { parseLocalDateInput } from '../utils/dateOnly';
 
 interface AssistantTimeSlotSelectorProps {
   clients: Client[];
@@ -507,7 +508,7 @@ export function AssistantTimeSlotSelector({
                 value={filters.dateFrom ? formatDateForInput(filters.dateFrom) : ''}
                 onChange={(e) => setFilters(prev => ({ 
                   ...prev, 
-                  dateFrom: e.target.value ? new Date(e.target.value) : undefined 
+                  dateFrom: e.target.value ? parseLocalDateInput(e.target.value) : undefined
                 }))}
                 min={formatDateForInput(new Date())}
                 className="time-selector-date-input"

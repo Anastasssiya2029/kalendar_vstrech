@@ -68,8 +68,8 @@ export function QuickStats({ clients, meetings }: QuickStatsProps) {
       value: completedMeetings,
       subValue: `${totalMeetings} всего`,
       icon: Clock,
-      color: 'from-green-500 to-emerald-500',
-      bgColor: 'from-green-50 to-emerald-50',
+      color: 'from-orange-500 to-amber-500',
+      bgColor: 'from-orange-50 to-amber-50',
     },
     {
       label: 'Конверсия',

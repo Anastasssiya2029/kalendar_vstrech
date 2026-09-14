@@ -10,14 +10,35 @@ function snakeToCamel(value: any): any {
   return value;
 }
 
-function camelToSnake(value: any): any {
+const DATE_ONLY_WIRE_FIELDS = new Set([
+  "date",
+  "original_date",
+  "old_date",
+  "new_date",
+  "due_date",
+  "paid_date",
+]);
+
+function formatLocalDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function camelToSnake(value: any, wireField?: string): any {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) return value.map(camelToSnake);
+  if (value instanceof Date) {
+    return wireField && DATE_ONLY_WIRE_FIELDS.has(wireField)
+      ? formatLocalDateOnly(value)
+      : value;
+  }
   if (typeof value === "object" && !(value instanceof Date)) {
-    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [
-      key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
-      camelToSnake(nested),
-    ]));
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => {
+      const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+      return [snakeKey, camelToSnake(nested, snakeKey)];
+    }));
   }
   return value;
 }

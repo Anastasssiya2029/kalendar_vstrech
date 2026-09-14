@@ -363,10 +363,10 @@ label:not([class*='text-']) {
 }
 
 .calendar-stat-card--completed {
-  --calendar-stat-surface: #ecf8f0;
-  --calendar-stat-line: #bfe7cc;
-  --calendar-stat-ink: #277a49;
-  --calendar-stat-shadow: rgba(39, 122, 73, 0.15);
+  --calendar-stat-surface: #fff1e6;
+  --calendar-stat-line: #f0c59f;
+  --calendar-stat-ink: #ad5b1a;
+  --calendar-stat-shadow: rgba(173, 91, 26, 0.15);
 }
 
 .calendar-stat-card--rescheduled {
@@ -457,7 +457,7 @@ label:not([class*='text-']) {
 }
 
 .calendar-conversion-metric--completed {
-  background: linear-gradient(145deg, #fff 0%, #f0faf3 100%);
+  background: linear-gradient(145deg, #fff 0%, #fff4e9 100%);
 }
 
 .calendar-conversion-metric--sales {
@@ -933,9 +933,9 @@ label:not([class*='text-']) {
 }
 
 .calendar-period-meeting-chip--completed {
-  --meeting-chip-surface: #ecf8f0;
-  --meeting-chip-line: #bfe7cc;
-  --meeting-chip-ink: #277a49;
+  --meeting-chip-surface: #fff1e6;
+  --meeting-chip-line: #f0c59f;
+  --meeting-chip-ink: #ad5b1a;
 }
 
 .calendar-period-meeting-chip--sale {
@@ -1378,8 +1378,8 @@ label:not([class*='text-']) {
 
 .meeting-detail-action { min-height: 2.25rem; border-radius: 0.75rem; }
 .meeting-detail-action:hover { transform: translateY(-1px); }
-.meeting-detail-action--completed { color: #fff; background: linear-gradient(135deg, #238754 0%, #4bbd79 100%); }
-.meeting-detail-action--completed:hover { background: linear-gradient(135deg, #1b6f43 0%, #359e62 100%); }
+.meeting-detail-action--completed { color: #fff; background: linear-gradient(135deg, #bf6725 0%, #df914a 100%); }
+.meeting-detail-action--completed:hover { background: linear-gradient(135deg, #a9551b 0%, #c97a34 100%); }
 .meeting-detail-action--sale { color: #fff; background: linear-gradient(135deg, #6f2e89 0%, #ad3f92 100%); }
 .meeting-detail-action--sale:hover { background: linear-gradient(135deg, #57236d 0%, #91337b 100%); }
 .meeting-detail-action--cancelled { color: #b42345; border-color: #f0bfc9; }
@@ -1399,11 +1399,11 @@ label:not([class*='text-']) {
 }
 
 .meeting-result-dialog {
-  --meeting-result-accent: #238754;
-  --meeting-result-surface: #eef9f2;
+  --meeting-result-accent: #c96c29;
+  --meeting-result-surface: #fff5eb;
   padding: clamp(1.1rem, 2.8vw, 1.6rem);
   background: linear-gradient(145deg, #fff 0%, var(--meeting-result-surface) 100%);
-  border: 1px solid #d7eadc;
+  border: 1px solid #efd8c2;
   border-radius: 1.5rem;
   box-shadow: 0 24px 70px rgba(47, 18, 64, 0.2);
 }
@@ -1440,7 +1440,7 @@ label:not([class*='text-']) {
   box-shadow: 0 8px 17px rgba(35, 135, 84, 0.22);
 }
 
-.meeting-result-dialog-icon.is-completed { background: linear-gradient(135deg, #238754 0%, #4bbd79 100%); }
+.meeting-result-dialog-icon.is-completed { background: linear-gradient(135deg, #bf6725 0%, #df914a 100%); box-shadow: 0 8px 17px rgba(191, 103, 37, 0.22); }
 .meeting-result-dialog-icon.is-sale { background: linear-gradient(135deg, #6f2e89 0%, #ad3f92 100%); box-shadow: 0 8px 17px rgba(111, 46, 137, 0.22); }
 
 .meeting-result-dialog-client {
@@ -1506,8 +1506,8 @@ label:not([class*='text-']) {
 .meeting-result-cancel { color: #71677a; border-color: #ded4e1; background: rgba(255, 255, 255, 0.65); }
 .meeting-result-cancel:hover { color: #4d4454; background: #fff; }
 .meeting-result-submit { color: #fff; }
-.meeting-result-submit.is-completed { background: linear-gradient(135deg, #238754 0%, #4bbd79 100%); }
-.meeting-result-submit.is-completed:hover { background: linear-gradient(135deg, #1b6f43 0%, #359e62 100%); }
+.meeting-result-submit.is-completed { background: linear-gradient(135deg, #bf6725 0%, #df914a 100%); }
+.meeting-result-submit.is-completed:hover { background: linear-gradient(135deg, #a9551b 0%, #c97a34 100%); }
 .meeting-result-submit.is-sale { background: linear-gradient(135deg, #6f2e89 0%, #ad3f92 100%); }
 .meeting-result-submit.is-sale:hover { background: linear-gradient(135deg, #57236d 0%, #91337b 100%); }
 
@@ -2860,6 +2860,8 @@ label:not([class*='text-']) {
   --status-line: #dccce0;
   --status-ink: #6d6275;
   --status-shadow: rgba(79, 22, 75, 0.12);
+  --status-active: var(--brand-gradient);
+  --status-active-ink: #fff;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -2913,10 +2915,12 @@ label:not([class*='text-']) {
 }
 
 .status-filter--selecting {
-  --status-surface: #fff3dc;
-  --status-line: #f1d18a;
-  --status-ink: #a96b06;
-  --status-shadow: rgba(231, 165, 46, 0.18);
+  --status-surface: #f7f5f7;
+  --status-line: #ded8df;
+  --status-ink: #817783;
+  --status-shadow: rgba(92, 79, 96, 0.1);
+  --status-active: linear-gradient(135deg, #f4f1f4, #e9e4ea);
+  --status-active-ink: #665c69;
 }
 
 .status-filter--scheduled {
@@ -2924,6 +2928,7 @@ label:not([class*='text-']) {
   --status-line: #d8cedc;
   --status-ink: #6d6275;
   --status-shadow: rgba(109, 98, 117, 0.13);
+  --status-active: linear-gradient(135deg, #8f929a, #a9acb3);
 }
 
 .status-filter--rescheduled {
@@ -2931,13 +2936,15 @@ label:not([class*='text-']) {
   --status-line: #bfdbfe;
   --status-ink: #2563eb;
   --status-shadow: rgba(37, 99, 235, 0.14);
+  --status-active: linear-gradient(135deg, #2f71dc, #64a0ee);
 }
 
 .status-filter--completed {
-  --status-surface: #e8f6ed;
-  --status-line: #bde4ca;
-  --status-ink: #277a49;
-  --status-shadow: rgba(39, 122, 73, 0.15);
+  --status-surface: #fff1e6;
+  --status-line: #f0c59f;
+  --status-ink: #ad5b1a;
+  --status-shadow: rgba(173, 91, 26, 0.15);
+  --status-active: linear-gradient(135deg, #bf6725, #df914a);
 }
 
 .status-filter--sale {
@@ -2945,6 +2952,7 @@ label:not([class*='text-']) {
   --status-line: #dfbfe1;
   --status-ink: #6f2e89;
   --status-shadow: rgba(111, 46, 137, 0.15);
+  --status-active: linear-gradient(135deg, #6f2e89, #a84285);
 }
 
 .status-filter--cancelled {
@@ -2952,25 +2960,44 @@ label:not([class*='text-']) {
   --status-line: #f5c1cc;
   --status-ink: #b42345;
   --status-shadow: rgba(180, 35, 69, 0.14);
+  --status-active: linear-gradient(135deg, #b93453, #dc617a);
 }
 
 .client-status-filter.is-active {
-  color: #fff;
-  background: var(--brand-gradient);
+  color: var(--status-active-ink);
+  background: var(--status-active);
   border-color: transparent !important;
   box-shadow: 0 9px 20px rgba(111, 46, 137, 0.22);
 }
 
 .client-status-filter.is-active:hover {
-  color: #fff;
+  color: var(--status-active-ink);
   box-shadow: 0 12px 24px rgba(111, 46, 137, 0.28);
 }
 
 .client-status-filter.is-active .status-filter-icon {
-  color: #fff;
+  color: var(--status-active-ink);
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.33), 0 3px 8px rgba(47, 18, 64, 0.18);
+}
+
+.meeting-client-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 720;
+  line-height: 1.15;
+}
+
+.meeting-client-status-badge.is-neutral {
+  color: #746a77;
+  background: transparent;
+  border-color: #ded8df;
 }
 
 .client-list-empty {
