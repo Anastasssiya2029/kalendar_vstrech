@@ -108,10 +108,13 @@ export function DayDetailsDialog({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="meeting-details-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="meeting-details-dialog">
           <DialogHeader className="meeting-details-dialog-header">
             <DialogTitle className="meeting-details-dialog-title">
-              <div>
+              <span className="meeting-details-dialog-icon" aria-hidden="true">
+                <Calendar className="w-5 h-5" />
+              </span>
+              <div className="meeting-details-dialog-heading">
                 <p className="meeting-details-dialog-eyebrow">Календарь встреч</p>
                 <h2>Встречи на день</h2>
                 <p className="meeting-details-dialog-date">{formatDate()}</p>
@@ -122,7 +125,7 @@ export function DayDetailsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
+          <div className="meeting-details-dialog-body">
             {sortedMeetings.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Clock className="w-12 h-12 mx-auto mb-2 text-gray-400" />
@@ -177,19 +180,19 @@ export function DayDetailsDialog({
                     {/* Детали встречи */}
                     <div className="meeting-detail-meta-grid grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                       {/* Юзернейм */}
-                      <div className="meeting-detail-meta">
+                      <div className="meeting-detail-meta meeting-detail-meta--client">
                         <User className="w-4 h-4" />
                         <span className="text-sm text-gray-700">{client.username}</span>
                       </div>
 
                       {/* Время */}
-                      <div className="meeting-detail-meta">
+                      <div className="meeting-detail-meta meeting-detail-meta--time">
                         <Clock className="w-4 h-4" />
                         <span className="text-sm font-semibold text-gray-900">{meeting.startTime}</span>
                       </div>
 
                       {/* Менеджер */}
-                      <div className="meeting-detail-meta">
+                      <div className="meeting-detail-meta meeting-detail-meta--manager">
                         <TrendingUp className="w-4 h-4" />
                         <span className="text-sm text-gray-700">
                           <span className="font-semibold">Менеджер:</span> {meeting.managerName}
@@ -226,7 +229,7 @@ export function DayDetailsDialog({
                         <div className="flex items-start gap-2">
                           <MessageSquare className="w-4 h-4 text-gray-600 mt-0.5" />
                           <div className="flex-1">
-                            <p className="text-xs text-gray-600 font-semibold mb-1">Комментарий менеджера по перепискам:</p>
+                            <p className="meeting-detail-comment-label">Комментарий менеджера по перепискам</p>
                             <p className="text-sm text-gray-700">{client.comment}</p>
                           </div>
                         </div>
@@ -301,7 +304,7 @@ export function DayDetailsDialog({
 
                     {/* Действия доступны для запланированной встречи. */}
                     {isActionable ? (
-                      <div className="space-y-2">
+                      <div className="meeting-detail-actions">
                         <Button
                           onClick={() => handleMarkCompleted(meeting)}
                           className="meeting-detail-action meeting-detail-action--completed"
@@ -310,29 +313,18 @@ export function DayDetailsDialog({
                           <CheckCircle className="w-4 h-4 mr-2" />
                           Встреча проведена
                         </Button>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button
-                            onClick={() => {
-                              setSelectedMeeting(meeting);
-                              setResultMode('with_sale');
-                              setShowResultDialog(true);
-                            }}
-                            className="meeting-detail-action meeting-detail-action--sale"
-                            size="sm"
-                          >
-                            <DollarSign className="w-4 h-4 mr-1" />
-                            С продажей
-                          </Button>
-                          <Button
-                            onClick={() => setMeetingToCancel(meeting)}
-                            variant="outline"
-                            className="meeting-detail-action meeting-detail-action--cancelled"
-                            size="sm"
-                          >
-                            <XCircle className="w-4 h-4 mr-1" />
-                            Отменена
-                          </Button>
-                        </div>
+                        <Button
+                          onClick={() => {
+                            setSelectedMeeting(meeting);
+                            setResultMode('with_sale');
+                            setShowResultDialog(true);
+                          }}
+                          className="meeting-detail-action meeting-detail-action--sale"
+                          size="sm"
+                        >
+                          <DollarSign className="w-4 h-4 mr-1" />
+                          С продажей
+                        </Button>
                         {onRescheduleMeeting && (
                           <Button
                             onClick={() => {
@@ -347,6 +339,15 @@ export function DayDetailsDialog({
                             Перенести встречу
                           </Button>
                         )}
+                        <Button
+                          onClick={() => setMeetingToCancel(meeting)}
+                          variant="outline"
+                          className="meeting-detail-action meeting-detail-action--cancelled"
+                          size="sm"
+                        >
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Отменить
+                        </Button>
                       </div>
                     ) : actualStatus === 'completed' ? (
                       <div className="space-y-2">

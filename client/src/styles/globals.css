@@ -4252,6 +4252,283 @@ table tr {
   box-shadow: none;
 }
 
+/* Day meeting dialog: one calm composition with compact actions and no nested
+   rectangular panels. These rules intentionally follow the later mobile layer. */
+.meeting-details-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(calc(100vw - 2rem), 43rem) !important;
+  max-width: 43rem !important;
+  max-height: min(90dvh, 52rem) !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 100% 0, rgba(180, 74, 152, 0.08), transparent 15rem),
+    #fcfafc;
+  border: 1px solid #e7dce9;
+  border-radius: 1.55rem;
+  box-shadow: 0 26px 75px rgba(48, 24, 57, 0.22);
+}
+
+.meeting-details-dialog > button[data-slot="dialog-close"] {
+  top: 1.15rem;
+  right: 1.15rem;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  color: #6f6173;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid #eadfeb;
+  border-radius: 999px;
+  opacity: 1;
+}
+
+.meeting-details-dialog > button[data-slot="dialog-close"]:hover {
+  color: #5f256d;
+  background: #fff;
+}
+
+.meeting-details-dialog-header {
+  padding: 1.35rem 4rem 1.1rem 1.4rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.meeting-details-dialog-title {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  text-align: left;
+}
+
+.meeting-details-dialog-icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(145deg, #63307b 0%, #a23f87 100%);
+  border-radius: 0.9rem;
+  box-shadow: 0 9px 20px rgba(111, 46, 137, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.meeting-details-dialog-heading {
+  min-width: 0;
+}
+
+.meeting-details-dialog-body {
+  display: grid;
+  gap: 0.8rem;
+  min-height: 0;
+  padding: 0 1.4rem 1.4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.meeting-detail-card {
+  --meeting-detail-accent: #98a2b3;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e9e1ea;
+  border-left: 3px solid var(--meeting-detail-accent);
+  border-radius: 1.1rem;
+  box-shadow: 0 8px 22px rgba(54, 31, 62, 0.055);
+}
+
+.meeting-detail-card--completed { --meeting-detail-accent: #d47d32; }
+.meeting-detail-card--sale { --meeting-detail-accent: #8d3b78; }
+.meeting-detail-card--rescheduled { --meeting-detail-accent: #3b82f6; }
+.meeting-detail-card--cancelled { --meeting-detail-accent: #d84d6a; }
+
+.meeting-detail-card-header {
+  align-items: flex-start;
+  padding: 0 0 0.8rem;
+  margin-bottom: 0.8rem !important;
+  border-bottom-color: #f0e9f0;
+}
+
+.meeting-detail-status-dot {
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-top: 0.38rem;
+  background: var(--meeting-detail-accent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--meeting-detail-accent) 12%, white);
+}
+
+.meeting-detail-client-name {
+  color: #281c2f;
+  font-size: 1.05rem;
+}
+
+.meeting-detail-status {
+  color: var(--meeting-detail-accent);
+  font-size: 0.78rem;
+}
+
+.meeting-detail-meta-grid {
+  grid-template-columns: minmax(0, 1fr) 8.75rem !important;
+  gap: 0.55rem !important;
+}
+
+.meeting-detail-meta {
+  min-height: 2.55rem;
+  padding: 0.58rem 0.7rem;
+  color: #584b5d;
+  background: #faf8fa;
+  border: 1px solid #eee7ef;
+  border-radius: 0.78rem;
+}
+
+.meeting-detail-meta--manager {
+  grid-column: 1 / -1;
+}
+
+.meeting-detail-meta svg {
+  flex: 0 0 auto;
+  color: #7b3c91;
+}
+
+.meeting-detail-comment {
+  padding: 0.72rem 0.78rem;
+  color: #615464;
+  background: #fbf8f5;
+  border: 1px solid #eee5df;
+  border-radius: 0.82rem;
+}
+
+.meeting-detail-comment-label {
+  margin: 0 0 0.2rem;
+  color: #817384 !important;
+  font-size: 0.69rem;
+  font-weight: 750;
+}
+
+.meeting-detail-notes-add {
+  min-height: 2.3rem;
+  padding-inline: 0.8rem;
+  color: #a65d22;
+  background: #fffaf5;
+  border-color: #edc9a8;
+  border-radius: 0.72rem;
+  font-size: 0.78rem;
+}
+
+.meeting-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 0.8rem;
+  border-top: 1px solid #f0e9f0;
+}
+
+.meeting-detail-action {
+  width: auto;
+  min-height: 2.35rem;
+  padding-inline: 0.82rem;
+  border-radius: 0.72rem;
+  font-size: 0.78rem;
+  box-shadow: none;
+}
+
+.meeting-detail-action--completed {
+  color: #fff;
+  background: linear-gradient(135deg, #bf6725 0%, #df914a 100%);
+  box-shadow: 0 7px 15px rgba(191, 103, 37, 0.17);
+}
+
+.meeting-detail-action--completed:hover {
+  background: linear-gradient(135deg, #a9551b 0%, #c97a34 100%);
+}
+
+.meeting-detail-action--sale {
+  box-shadow: 0 7px 15px rgba(111, 46, 137, 0.16);
+}
+
+.meeting-detail-action--rescheduled,
+.meeting-detail-action--cancelled {
+  background: #fff;
+}
+
+.meeting-detail-status-summary {
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+}
+
+@media (max-width: 40rem) {
+  .meeting-details-dialog {
+    width: calc(100vw - 0.75rem) !important;
+    max-height: calc(100dvh - 0.75rem) !important;
+    border-radius: 1.2rem;
+  }
+
+  .meeting-details-dialog-header {
+    padding: 1rem 3.5rem 0.9rem 1rem;
+  }
+
+  .meeting-details-dialog-icon {
+    width: 2.45rem;
+    height: 2.45rem;
+    border-radius: 0.78rem;
+  }
+
+  .meeting-details-dialog-title h2 {
+    font-size: 1.18rem;
+  }
+
+  .meeting-details-dialog-date {
+    font-size: 0.76rem;
+    line-height: 1.3;
+  }
+
+  .meeting-details-dialog-body {
+    padding: 0 0.75rem 0.85rem;
+  }
+
+  .meeting-detail-card {
+    padding: 0.82rem;
+  }
+
+  .meeting-detail-meta-grid {
+    grid-template-columns: minmax(0, 1fr) 6.8rem !important;
+  }
+
+  .meeting-detail-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .meeting-detail-action {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 0.5rem;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 24rem) {
+  .meeting-details-dialog-title {
+    align-items: flex-start;
+  }
+
+  .meeting-details-dialog-icon {
+    display: none;
+  }
+
+  .meeting-detail-meta-grid,
+  .meeting-detail-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .meeting-detail-meta--manager {
+    grid-column: auto;
+  }
+}
+
 @media (max-width: 40rem) {
   /* The last metric intentionally spans both columns: it reads as a complete
      fifth item instead of a stranded, wrapped half-card. */
