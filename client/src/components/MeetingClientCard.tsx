@@ -563,10 +563,11 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
         <DialogContent className="client-delete-dialog">
           <DialogHeader className="client-delete-dialog-header">
             <div className="client-delete-dialog-icon"><Trash2 className="w-5 h-5" /></div>
-            <div>
+            <div className="client-delete-dialog-copy">
+              <p className="client-delete-dialog-eyebrow">Удаление клиента</p>
               <DialogTitle>Удалить клиента?</DialogTitle>
-              <DialogDescription>
-                Карточка {client.firstName} {client.lastName}, связанные встречи и записи будут удалены. Свободные окошки снова станут доступными.
+              <DialogDescription className="client-delete-dialog-description">
+                Карточка <strong>{client.firstName} {client.lastName}</strong>, связанные встречи и записи будут удалены. Свободные окошки снова станут доступными.
               </DialogDescription>
             </div>
           </DialogHeader>
