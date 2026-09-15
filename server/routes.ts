@@ -452,6 +452,156 @@ async function bookTimeSlot(req: Request, res: Response) {
   });
 }
 
+// Перенос — одна транзакция: прежняя встреча остаётся в аналитике как
+// «перенесена», новое время бронируется, а старое освобождается вместе с ней.
+async function rescheduleMeeting(req: Request, res: Response) {
+  const user = assertSchool(req, res);
+  if (!user) return;
+
+  const schoolId = pathParam(req, "schoolId");
+  const source = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const meetingId = typeof source.meeting_id === "string" ? source.meeting_id
+    : typeof source.meetingId === "string" ? source.meetingId : "";
+  const slotId = typeof source.slot_id === "string" ? source.slot_id
+    : typeof source.slotId === "string" ? source.slotId : "";
+  const reason = typeof source.reason === "string" ? source.reason.trim() : "";
+  if (!meetingId || !slotId || !reason) throw error("Выберите встречу, новое окошко и укажите причину переноса");
+
+  const transaction = await pool.connect();
+  let previousMeeting: Record<string, any> | undefined;
+  let createdMeeting: Record<string, any> | undefined;
+  let oldSlot: Record<string, any> | undefined;
+  let bookedSlot: Record<string, any> | undefined;
+  let updatedClient: Record<string, any> | undefined;
+
+  try {
+    await transaction.query("BEGIN");
+    const meetingResult = await transaction.query<Record<string, any>>(
+      "SELECT * FROM meetings WHERE id = $1 AND school_id = $2 FOR UPDATE",
+      [meetingId, schoolId],
+    );
+    const meeting = meetingResult.rows[0];
+    if (!meeting) throw error("Встреча не найдена", 404);
+    if (user.role === "manager" && meeting.manager_id !== user.id) {
+      throw error("Можно переносить только свои встречи", 403);
+    }
+    if (meeting.status !== "scheduled" && meeting.status !== "scheduled_ready") {
+      throw error("Эту встречу уже нельзя перенести. Проверьте её текущий статус", 409);
+    }
+    previousMeeting = meeting;
+
+    const oldSlotResult = await transaction.query<Record<string, any>>(
+      "SELECT * FROM time_slots WHERE booking_id = $1 AND school_id = $2 FOR UPDATE",
+      [meeting.id, schoolId],
+    );
+    const currentSlot = oldSlotResult.rows[0];
+    if (!currentSlot || !currentSlot.is_booked) {
+      throw error("Текущее окошко встречи не найдено. Обновите календарь и попробуйте снова", 409);
+    }
+    if (currentSlot.id === slotId) throw error("Выберите другое окошко для переноса");
+
+    const newSlotResult = await transaction.query<Record<string, any>>(
+      "SELECT * FROM time_slots WHERE id = $1 AND school_id = $2 FOR UPDATE",
+      [slotId, schoolId],
+    );
+    const targetSlot = newSlotResult.rows[0];
+    if (!targetSlot) throw error("Новое окошко не найдено", 404);
+    if (user.role === "manager" && targetSlot.manager_id !== user.id) {
+      throw error("Можно переносить только в свои окошки", 403);
+    }
+    if (targetSlot.is_booked || targetSlot.booking_id) {
+      throw error("Выбранное окошко уже занято. Выберите другое", 409);
+    }
+    const targetManager = await transaction.query<{ id: string }>(
+      "SELECT id FROM users WHERE id = $1 AND is_active = true AND (school_id = $2 OR role = 'architect')",
+      [targetSlot.manager_id, schoolId],
+    );
+    if (!targetManager.rows[0]) throw error("Менеджер нового окошка больше не работает в школе", 409);
+
+    const clientResult = await transaction.query<Record<string, any>>(
+      "SELECT * FROM clients WHERE id = $1 AND school_id = $2 FOR UPDATE",
+      [meeting.client_id, schoolId],
+    );
+    const client = clientResult.rows[0];
+    if (!client) throw error("Клиент встречи не найден", 404);
+
+    const history = Array.isArray(meeting.reschedule_history) ? meeting.reschedule_history : [];
+    const nextHistory = [...history, {
+      oldDate: meeting.date,
+      newDate: targetSlot.date,
+      oldTime: meeting.start_time,
+      newTime: targetSlot.start_time,
+      oldManagerId: meeting.manager_id,
+      oldManagerName: meeting.manager_name,
+      newManagerId: targetSlot.manager_id,
+      newManagerName: targetSlot.manager_name,
+      reason,
+      timestamp: new Date().toISOString(),
+      performedBy: user.name,
+    }];
+
+    const replacement = await transaction.query<Record<string, any>>(
+      `INSERT INTO meetings
+         (school_id, client_id, manager_id, manager_name, date, start_time, status,
+          original_date, reschedule_history, rescheduled_from_meeting_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+       RETURNING *`,
+      [schoolId, meeting.client_id, targetSlot.manager_id, targetSlot.manager_name,
+        targetSlot.date, targetSlot.start_time, client.form_completed ? "scheduled_ready" : "scheduled",
+        meeting.original_date ?? meeting.date, JSON.stringify(nextHistory), meeting.id],
+    );
+    const newMeeting = replacement.rows[0];
+    if (!newMeeting) throw error("Не удалось создать встречу на новое время", 500);
+    createdMeeting = newMeeting;
+
+    const oldMeetingUpdate = await transaction.query<Record<string, any>>(
+      `UPDATE meetings SET status = 'rescheduled', rescheduled_to_meeting_id = $1,
+          reschedule_reason = $2, updated_at = now()
+       WHERE id = $3 AND school_id = $4 RETURNING *`,
+      [newMeeting.id, reason, meeting.id, schoolId],
+    );
+    previousMeeting = oldMeetingUpdate.rows[0];
+    const oldSlotUpdate = await transaction.query<Record<string, any>>(
+      `UPDATE time_slots SET is_booked = false, booking_id = NULL, updated_at = now()
+       WHERE id = $1 AND school_id = $2 RETURNING *`,
+      [currentSlot.id, schoolId],
+    );
+    oldSlot = oldSlotUpdate.rows[0];
+    const newSlotUpdate = await transaction.query<Record<string, any>>(
+      `UPDATE time_slots SET is_booked = true, booking_id = $1, updated_at = now()
+       WHERE id = $2 AND school_id = $3 RETURNING *`,
+      [newMeeting.id, targetSlot.id, schoolId],
+    );
+    bookedSlot = newSlotUpdate.rows[0];
+    const clientUpdate = await transaction.query<Record<string, any>>(
+      `UPDATE clients SET status = $1, provided_slot_ids = ARRAY[]::text[],
+          time_selection_closed = false, updated_at = now()
+       WHERE id = $2 AND school_id = $3 RETURNING *`,
+      [client.form_completed ? "ready" : "scheduled", client.id, schoolId],
+    );
+    updatedClient = clientUpdate.rows[0];
+    await transaction.query("COMMIT");
+  } catch (cause) {
+    await transaction.query("ROLLBACK").catch(() => undefined);
+    throw cause;
+  } finally {
+    transaction.release();
+  }
+
+  if (previousMeeting) {
+    const meeting = previousMeeting as { id: string; manager_id: string; client_id: string };
+    await recordMeetingActivity(schoolId, { id: meeting.id, manager_id: meeting.manager_id, client_id: meeting.client_id }, "meeting_rescheduled").catch(() => undefined);
+    await queueMeetingNotification({ id: meeting.id, manager_id: meeting.manager_id }, "rescheduled").catch(() => undefined);
+  }
+  return res.json({
+    previousMeeting: camelize(previousMeeting),
+    meeting: camelize(createdMeeting),
+    oldTimeSlot: camelize(oldSlot),
+    timeSlot: camelize(bookedSlot),
+    client: camelize(updatedClient),
+  });
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret || sessionSecret.length < 32) throw new Error("SESSION_SECRET must contain at least 32 characters");
@@ -721,6 +871,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/schools/:schoolId/bookings", requireUser, (req, res, next) => bookTimeSlot(req, res).catch(next));
+  app.post("/api/schools/:schoolId/reschedules", requireUser, (req, res, next) => rescheduleMeeting(req, res).catch(next));
 
   for (const entity of Object.keys(entityConfig) as Entity[]) {
     app.get(`/api/schools/:schoolId/${entity}`, requireUser, (req, res, next) => listEntity(req, res, entity).catch(next));

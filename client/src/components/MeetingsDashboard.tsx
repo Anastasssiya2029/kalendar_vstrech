@@ -610,130 +610,33 @@ export function MeetingsDashboard() {
   };
 
   const handleRescheduleMeeting = async (meetingId: string, newSlot: TimeSlot, reason: string) => {
-    const oldMeeting = meetings.find(m => m.id === meetingId);
-    if (!oldMeeting) return;
+    if (!school?.id) throw new Error('Школа не выбрана');
+    const previous = meetings.find((meeting) => meeting.id === meetingId);
+    if (!previous) throw new Error('Встреча не найдена. Обновите календарь');
 
-    const client = clients.find(c => c.meeting?.id === meetingId);
-    if (!client) return;
-    const oldSlot = timeSlots.find(slot => slot.bookingId === meetingId);
+    const result = await apiService.rescheduleMeeting(school.id, meetingId, newSlot.id, reason);
+    const oldMeeting = normalizeMeeting(result.previousMeeting);
+    const replacement = normalizeMeeting(result.meeting);
+    const oldTimeSlot = normalizeTimeSlot(result.oldTimeSlot);
+    const bookedTimeSlot = normalizeTimeSlot(result.timeSlot);
+    const updatedClient = normalizeClient(result.client);
 
-    setTimeSlots(prevSlots =>
-      prevSlots.map(slot =>
-        slot.bookingId === meetingId
-          ? { ...slot, isBooked: false, bookingId: undefined }
-          : slot
-      )
-    );
-
-    const newMeetingId = `m${Date.now()}`;
-    const newMeetingData = {
-      clientId: oldMeeting.clientId,
-      managerId: newSlot.managerId,
-      managerName: newSlot.managerName,
-      date: newSlot.date,
-      startTime: newSlot.startTime,
-      status: client.formCompleted ? ('scheduled_ready' as const) : ('scheduled' as const),
-      rescheduledFromMeetingId: meetingId,
-      rescheduleHistory: [
-        ...(oldMeeting.rescheduleHistory || []),
-        {
-          oldDate: oldMeeting.date,
-          newDate: newSlot.date,
-          oldTime: oldMeeting.startTime,
-          newTime: newSlot.startTime,
-          oldManagerId: oldMeeting.managerId,
-          oldManagerName: oldMeeting.managerName,
-          newManagerId: newSlot.managerId,
-          newManagerName: newSlot.managerName,
-          reason,
-          timestamp: new Date(),
-          performedBy: user?.name || 'Менеджер'
-        }
-      ],
-      schoolId: oldMeeting.schoolId,
-    };
-    const newMeeting: Meeting = {
-      ...newMeetingData,
-      id: newMeetingId,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    const rescheduledOldMeeting: Meeting = {
-      ...oldMeeting,
-      status: 'rescheduled',
-      rescheduledToMeetingId: newMeetingId,
-      rescheduleReason: reason,
-      updatedAt: new Date()
-    };
-
-    setMeetings(prevMeetings => [
-      ...prevMeetings.map(m => 
-        m.id === meetingId ? rescheduledOldMeeting : m
-      ),
-      newMeeting
+    setMeetings((current) => [
+      ...current.filter((meeting) => meeting.id !== replacement.id).map((meeting) =>
+        meeting.id === meetingId ? oldMeeting : meeting),
+      replacement,
     ]);
+    setTimeSlots((current) => current.map((slot) =>
+      slot.id === oldTimeSlot.id ? oldTimeSlot
+        : slot.id === bookedTimeSlot.id ? bookedTimeSlot : slot));
+    setClients((current) => current.map((client) =>
+      client.id === updatedClient.id
+        ? { ...client, ...updatedClient, meeting: replacement }
+        : client));
 
-    setClients(prevClients =>
-      prevClients.map(c => {
-        if (c.id === client.id) {
-          let newStatus = c.status;
-          if (c.status === 'cancelled') {
-            newStatus = c.formCompleted ? 'ready' : 'scheduled';
-          }
-          
-          return { 
-            ...c, 
-            meeting: newMeeting,
-            status: newStatus,
-            providedSlotIds: undefined,
-            updatedAt: new Date() 
-          };
-        }
-        return c;
-      })
-    );
-
-    setTimeSlots(prevSlots =>
-      prevSlots.map(slot =>
-        slot.id === newSlot.id
-          ? { ...slot, isBooked: true, bookingId: newMeetingId }
-          : slot
-      )
-    );
-
-    const managerChanged = oldMeeting.managerId !== newSlot.managerId;
-    toast.success(
-      managerChanged 
-        ? `Встреча перенесена к менеджеру ${newSlot.managerName}` 
-        : 'Встреча успешно перенесена'
-    );
-
-    if (school?.id) {
-      try {
-        // Сначала получаем настоящий UUID новой встречи. Временный id годится только для UI
-        // и никогда не должен попадать в UUID-поля базы данных.
-        const newMeetingRes = await apiService.createMeeting(school.id, newMeetingData);
-        if (newMeetingRes.meeting) {
-          const createdMeeting = normalizeMeeting(newMeetingRes.meeting);
-          await Promise.all([
-            apiService.updateMeeting(school.id, meetingId, { status: 'rescheduled', rescheduledToMeetingId: createdMeeting.id, rescheduleReason: reason }),
-            apiService.updateTimeSlot(school.id, newSlot.id, { isBooked: true, bookingId: createdMeeting.id }),
-            ...(oldSlot ? [apiService.updateTimeSlot(school.id, oldSlot.id, { isBooked: false, bookingId: null })] : []),
-          ]);
-          setMeetings(prev => prev.map(m => m.id === newMeetingId ? { ...m, ...createdMeeting } : m));
-          setClients(prev => prev.map(c => c.id === client.id && c.meeting?.id === newMeetingId ? { ...c, meeting: { ...c.meeting, ...createdMeeting } } : c));
-        }
-        let newStatus = client.status;
-        if (client.status === 'cancelled') {
-          newStatus = client.formCompleted ? 'ready' : 'scheduled';
-        }
-        apiService.updateClient(school.id, client.id, { status: newStatus, providedSlotIds: [] }).catch(() => {});
-      } catch (error) {
-        console.error('Error rescheduling meeting:', error);
-        toast.error('Ошибка переноса встречи');
-      }
-    }
+    toast.success(previous.managerId !== replacement.managerId
+      ? `Встреча перенесена к менеджеру ${replacement.managerName}`
+      : 'Встреча успешно перенесена');
   };
 
   const handleCalendarStatusChange = (

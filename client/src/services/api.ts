@@ -173,6 +173,15 @@ class ApiService {
     });
   }
 
+  async rescheduleMeeting(schoolId: string, meetingId: string, slotId: string, reason: string) {
+    return this.request<{ previousMeeting: any; meeting: any; oldTimeSlot: any; timeSlot: any; client: any }>(
+      this.schoolPath(schoolId, "reschedules"), {
+        method: "POST",
+        body: JSON.stringify(camelToSnake({ meetingId, slotId, reason })),
+      },
+    );
+  }
+
   async updateMeeting(schoolId: string, meetingId: string, data: any) {
     return this.request<{ meeting: any }>(this.schoolPath(schoolId, `meetings/${encodeURIComponent(meetingId)}`), {
       method: "PATCH",

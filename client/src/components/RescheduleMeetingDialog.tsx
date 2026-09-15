@@ -22,7 +22,7 @@ interface RescheduleMeetingDialogProps {
   allClients: Client[]; // Все клиенты для подсчета таблеток
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onReschedule: (meetingId: string, newSlot: TimeSlot, reason: string) => void;
+  onReschedule: (meetingId: string, newSlot: TimeSlot, reason: string) => Promise<void>;
   onProvideSlots?: (clientId: string, slotIds: string[]) => void; // Предоставить окошки на выбор
 }
 
@@ -59,6 +59,7 @@ export function RescheduleMeetingDialog({
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [managerFilter, setManagerFilter] = useState<'current' | 'any'>('current');
   const [clientViewMode, setClientViewMode] = useState<boolean>(false);
   const [dayTypeFilter, setDayTypeFilter] = useState<DayType | undefined>(undefined);
@@ -237,8 +238,9 @@ export function RescheduleMeetingDialog({
     toast.success(`Предоставлено ${slotsToProvide.length} окошек на выбор`);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     
     if (!selectedSlot) {
       setError('Выберите новое время');
@@ -250,17 +252,22 @@ export function RescheduleMeetingDialog({
       return;
     }
 
-    onReschedule(meeting.id, selectedSlot, reason.trim());
-    
-    // Сброс формы
-    setSelectedSlot(null);
-    setReason('');
+    setIsSubmitting(true);
     setError('');
-    onOpenChange(false);
+    try {
+      await onReschedule(meeting.id, selectedSlot, reason.trim());
+      setSelectedSlot(null);
+      setReason('');
+      onOpenChange(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось перенести встречу');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isSubmitting) onOpenChange(nextOpen); }}>
       <DialogContent className="reschedule-dialog sm:max-w-[680px] max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
         <DialogHeader className="reschedule-dialog-header">
           <DialogTitle className="reschedule-dialog-title">
@@ -641,6 +648,7 @@ export function RescheduleMeetingDialog({
                 <Button
                   type="button"
                   onClick={handleProvideSlots}
+                  disabled={isSubmitting}
                   className="reschedule-provide-button"
                 >
                   Предоставить выбор 💊
@@ -653,6 +661,7 @@ export function RescheduleMeetingDialog({
               <Button
                 type="button"
                 variant="outline"
+                disabled={isSubmitting}
                 onClick={() => {
                   onOpenChange(false);
                   setSelectedSlot(null);
@@ -665,11 +674,11 @@ export function RescheduleMeetingDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={availableFreeSlots.length === 0}
+                disabled={availableFreeSlots.length === 0 || isSubmitting}
                 className="reschedule-submit-button"
               >
                 <CalendarClock className="w-4 h-4 mr-2" />
-                Перенести встречу
+                {isSubmitting ? 'Переносим…' : 'Перенести встречу'}
               </Button>
             </div>
           </div>
