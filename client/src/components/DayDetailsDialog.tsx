@@ -6,6 +6,7 @@ import { User, Clock, MessageSquare, TrendingUp, DollarSign, Calendar, CheckCirc
 import { MeetingResultDialog } from './MeetingResultDialog';
 import { MeetingCancellationDialog } from './MeetingCancellationDialog';
 import { useAuth } from '../contexts/AuthContext';
+import { TelegramUsername } from './TelegramUsername';
 
 interface DayDetailsDialogProps {
   day: number;
@@ -182,7 +183,7 @@ export function DayDetailsDialog({
                       {/* Юзернейм */}
                       <div className="meeting-detail-meta meeting-detail-meta--client">
                         <User className="w-4 h-4" />
-                        <span className="text-sm text-gray-700">{client.username}</span>
+                        <TelegramUsername username={client.username} className="text-sm text-gray-700" />
                       </div>
 
                       {/* Время */}

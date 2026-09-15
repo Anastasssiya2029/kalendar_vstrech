@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Client, Meeting, getClientStatusColor, getClientStatusText, getMeetingStatusColor, getMeetingStatusText } from '../types';
+import { Client, Meeting, getClientStatusColor, getClientStatusText, getMeetingStatusColor, getMeetingStatusText, getCurrentClientMeeting, getLatestClientStatus } from '../types';
+import { TelegramUsername } from './TelegramUsername';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -32,7 +33,7 @@ const formatDateCompact = (date: Date): string => {
   return `${day}.${month}.${year}`;
 };
 
-export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRescheduleMeeting, onCancelMeeting, onMarkSale, onTogglePin, onSelectTimeForClient, onDeleteClient, meetings = [] }: MeetingClientCardProps & { meetings?: Meeting[] }) {
+export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCompleted, onRescheduleMeeting, onCancelMeeting, onMarkSale, onTogglePin, onSelectTimeForClient, onDeleteClient, meetings = [] }: MeetingClientCardProps & { meetings?: Meeting[] }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [saleData, setSaleData] = useState({
@@ -42,6 +43,8 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
   const [meetingToCancel, setMeetingToCancel] = useState<Meeting | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const currentMeeting = getCurrentClientMeeting(sourceClient, meetings);
+  const client = { ...sourceClient, status: getLatestClientStatus(sourceClient, meetings), meeting: currentMeeting };
   const clientMeetingsFromStore = meetings
     .filter((meeting) => meeting.clientId === client.id)
     .sort((a, b) => b.date.getTime() - a.date.getTime() || b.startTime.localeCompare(a.startTime));
@@ -57,12 +60,8 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
       (client.meeting.rescheduleHistory?.length ?? 0) > 0
     ),
   );
-  const statusColor = hasRescheduleHistory
-    ? getMeetingStatusColor('rescheduled')
-    : getClientStatusColor(client.status);
-  const statusText = hasRescheduleHistory
-    ? getMeetingStatusText('rescheduled')
-    : getClientStatusText(client.status);
+  const statusColor = getClientStatusColor(client.status);
+  const statusText = getClientStatusText(client.status);
   const canScheduleRepeat = Boolean(
     client.meeting && ['completed', 'completed_with_sale'].includes(client.meeting.status),
   );
@@ -99,7 +98,7 @@ export function MeetingClientCard({ client, onEdit, onToggleFormCompleted, onRes
                 )}
               </div>
               <div className="meeting-client-card-meta flex items-center gap-2 mt-1">
-                <span className="text-sm text-gray-600">{client.username}</span>
+                <TelegramUsername username={client.username} className="text-sm text-gray-600" />
                 <span
                   className={`meeting-client-status-badge ${client.status === 'selecting_time' ? 'is-neutral' : ''}`}
                   style={client.status === 'selecting_time' ? undefined : { backgroundColor: statusColor }}

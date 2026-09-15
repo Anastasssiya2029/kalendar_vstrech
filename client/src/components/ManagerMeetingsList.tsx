@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TelegramUsername } from './TelegramUsername';
 import { Meeting, Client, MeetingStatus, getMeetingStatusColor, getMeetingStatusText } from '../types';
 import { Button } from './ui/button';
 import { Calendar, Clock, User, FileText, DollarSign, CheckCircle, XCircle, CalendarClock, Filter as FilterIcon } from 'lucide-react';
@@ -284,7 +285,7 @@ export function ManagerMeetingsList({
                         <h3 className="text-lg font-bold text-gray-800">
                           {client.firstName} {client.lastName}
                         </h3>
-                        <p className="text-sm text-gray-600">{client.username}</p>
+                        <TelegramUsername username={client.username} className="text-sm text-gray-600" />
                       </div>
                     </div>
 

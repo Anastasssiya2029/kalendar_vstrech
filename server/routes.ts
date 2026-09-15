@@ -273,6 +273,93 @@ async function updateEntity(req: Request, res: Response, entity: Entity) {
   const schoolId = pathParam(req, "schoolId");
   const entityId = pathParam(req, "id");
   const { conditions, values } = scopeFor(entity, schoolId, user);
+  if (entity === "meetings" && Object.prototype.hasOwnProperty.call(data, "status")) {
+    const transaction = await pool.connect();
+    let previousMeeting: Record<string, any> | undefined;
+    let updatedMeeting: Record<string, any> | undefined;
+    let updatedClient: Record<string, any> | undefined;
+    let releasedSlot: Record<string, any> | undefined;
+    try {
+      await transaction.query("BEGIN");
+      const scopedMeeting = await transaction.query<Record<string, any>>(
+        `SELECT * FROM meetings WHERE ${[...conditions, `id = $${values.length + 1}`].join(" AND ")} FOR UPDATE`,
+        [...values, entityId],
+      );
+      previousMeeting = scopedMeeting.rows[0];
+      if (!previousMeeting) throw error("Встреча не найдена", 404);
+      const nextStatus = data.status;
+      if (!['scheduled', 'scheduled_ready', 'completed', 'completed_with_sale', 'cancelled', 'rescheduled'].includes(String(nextStatus))) {
+        throw error("Недопустимый статус встречи");
+      }
+      if (nextStatus !== previousMeeting.status &&
+        !(['scheduled', 'scheduled_ready'].includes(previousMeeting.status) ||
+          (previousMeeting.status === 'completed' && nextStatus === 'completed_with_sale'))) {
+        throw error("Статус этой встречи уже нельзя изменить", 409);
+      }
+      const assignmentFields = Object.keys(data);
+      const assignmentValues = Object.values(data);
+      const changed = await transaction.query<Record<string, any>>(
+        `UPDATE meetings SET ${assignmentFields.map((field, index) => `${field} = $${index + 1}`).join(", ")}
+         WHERE id = $${assignmentValues.length + 1} AND school_id = $${assignmentValues.length + 2} RETURNING *`,
+        [...assignmentValues, entityId, schoolId],
+      );
+      updatedMeeting = changed.rows[0];
+      if (!updatedMeeting) throw error("Встреча не найдена", 404);
+      if (nextStatus === 'cancelled' || nextStatus === 'rescheduled') {
+        const released = await transaction.query<Record<string, any>>(
+          `UPDATE time_slots SET is_booked = false, booking_id = NULL, updated_at = now()
+           WHERE school_id = $1 AND booking_id = $2 RETURNING *`,
+          [schoolId, entityId],
+        );
+        releasedSlot = released.rows[0];
+      }
+      const clientForm = await transaction.query<{ form_completed: boolean }>(
+        "SELECT form_completed FROM clients WHERE id = $1 AND school_id = $2 FOR UPDATE",
+        [updatedMeeting.client_id, schoolId],
+      );
+      if (!clientForm.rows[0]) throw error("Клиент встречи не найден", 404);
+      const active = await transaction.query<{ status: string }>(
+        `SELECT status FROM meetings WHERE school_id = $1 AND client_id = $2
+         AND status IN ('scheduled', 'scheduled_ready') ORDER BY date ASC, start_time ASC LIMIT 1`,
+        [schoolId, updatedMeeting.client_id],
+      );
+      const latest = active.rows[0] ?? (await transaction.query<{ status: string }>(
+        `SELECT status FROM meetings WHERE school_id = $1 AND client_id = $2
+         ORDER BY date DESC, start_time DESC, created_at DESC LIMIT 1`,
+        [schoolId, updatedMeeting.client_id],
+      )).rows[0];
+      const clientState = latest?.status === 'scheduled_ready' ? 'ready'
+        : latest?.status === 'scheduled' ? (clientForm.rows[0].form_completed ? 'ready' : 'scheduled')
+        : latest?.status === 'completed_with_sale' ? 'completed_with_sale'
+        : latest?.status === 'completed' ? 'completed'
+        : latest?.status === 'cancelled' ? 'cancelled' : 'selecting_time';
+      const clientChange = await transaction.query<Record<string, any>>(
+        `UPDATE clients SET status = $1, updated_at = now() WHERE id = $2 AND school_id = $3 RETURNING *`,
+        [clientState, updatedMeeting.client_id, schoolId],
+      );
+      updatedClient = clientChange.rows[0];
+      await transaction.query("COMMIT");
+    } catch (cause) {
+      await transaction.query("ROLLBACK").catch(() => undefined);
+      throw cause;
+    } finally {
+      transaction.release();
+    }
+    if (updatedMeeting && previousMeeting && updatedMeeting.status !== previousMeeting.status) {
+      const eventByStatus: Record<string, { activity: "meeting_rescheduled" | "meeting_cancelled" | "meeting_sold"; notification?: "rescheduled" | "cancelled" }> = {
+        rescheduled: { activity: "meeting_rescheduled", notification: "rescheduled" },
+        cancelled: { activity: "meeting_cancelled", notification: "cancelled" },
+        completed_with_sale: { activity: "meeting_sold" },
+      };
+      const event = eventByStatus[updatedMeeting.status];
+      if (event) {
+        const meeting = { id: updatedMeeting.id, manager_id: updatedMeeting.manager_id, client_id: updatedMeeting.client_id };
+        await recordMeetingActivity(schoolId, meeting, event.activity).catch(() => undefined);
+        if (event.notification) await queueMeetingNotification(meeting, event.notification).catch(() => undefined);
+      }
+    }
+    return res.json({ meeting: camelize(updatedMeeting), client: camelize(updatedClient), timeSlot: camelize(releasedSlot) });
+  }
   let previousMeeting: { status: string; id: string; manager_id: string; client_id: string } | undefined;
   if (entity === "meetings" && Object.prototype.hasOwnProperty.call(data, "status")) {
     const previousConditions = [...conditions, `id = $${values.length + 1}`];

@@ -373,29 +373,32 @@ export const getMeetingStatusText = (status: MeetingStatus): string => {
   }
 };
 
-// Функция получения актуального статуса встречи на основе статуса клиента
-// Это нужно для отображения в календаре - всегда показываем актуальное состояние
+// Статус календарной записи принадлежит самой встрече. Общий статус клиента
+// может относиться к другой встрече и не должен перекрашивать историю.
 export const getActualMeetingStatus = (meeting: Meeting, client: Client): MeetingStatus => {
-  const meetingDate = new Date(meeting.date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  meetingDate.setHours(0, 0, 0, 0);
-  
-  // Если встреча в прошлом - показываем финальный статус
-  if (meetingDate < today) {
-    // Для прошедших встреч оставляем их итоговый статус
-    return meeting.status;
-  }
-  
-  // Если встреча сегодня или в будущем - синхронизируем со статусом клиента
-  if (client.status === 'ready' && client.formCompleted) {
-    return 'scheduled_ready'; // Внутренний признак: анкета заполнена
-  } else if (client.status === 'scheduled') {
-    return 'scheduled'; // Просто записан
-  } else if (client.status === 'cancelled') {
-    return 'cancelled'; // Отменена
-  }
-  
-  // Для остальных случаев возвращаем статус встречи как есть
+  if (meeting.status === 'scheduled' && client.formCompleted) return 'scheduled_ready';
   return meeting.status;
+};
+
+export const getCurrentClientMeeting = (client: Client, meetings: Meeting[]): Meeting | undefined => {
+  const related = meetings.filter(meeting => meeting.clientId === client.id);
+  if (related.length === 0) return client.meeting;
+  const active = related
+    .filter(meeting => meeting.status === 'scheduled' || meeting.status === 'scheduled_ready')
+    .sort((a, b) => a.date.getTime() - b.date.getTime() || a.startTime.localeCompare(b.startTime));
+  if (active.length > 0) return active[0];
+  return related.sort((a, b) => b.date.getTime() - a.date.getTime() || b.startTime.localeCompare(a.startTime))[0];
+};
+
+export const getLatestClientStatus = (client: Client, meetings: Meeting[]): ClientStatus => {
+  const latest = getCurrentClientMeeting(client, meetings);
+  if (!latest) return client.status;
+  switch (latest.status) {
+    case 'scheduled': return client.formCompleted ? 'ready' : 'scheduled';
+    case 'scheduled_ready': return 'ready';
+    case 'completed': return 'completed';
+    case 'completed_with_sale': return 'completed_with_sale';
+    case 'cancelled': return 'cancelled';
+    case 'rescheduled': return 'selecting_time';
+  }
 };

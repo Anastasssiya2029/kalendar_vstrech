@@ -183,7 +183,7 @@ class ApiService {
   }
 
   async updateMeeting(schoolId: string, meetingId: string, data: any) {
-    return this.request<{ meeting: any }>(this.schoolPath(schoolId, `meetings/${encodeURIComponent(meetingId)}`), {
+    return this.request<{ meeting: any; client?: any; timeSlot?: any }>(this.schoolPath(schoolId, `meetings/${encodeURIComponent(meetingId)}`), {
       method: "PATCH",
       body: JSON.stringify(camelToSnake(data)),
     });

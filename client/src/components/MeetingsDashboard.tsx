@@ -452,6 +452,27 @@ export function MeetingsDashboard() {
     setMeetingResultDialog({ meeting, mode: 'with_sale' });
   };
 
+  const persistMeetingStatus = async (meetingId: string, data: Record<string, unknown>) => {
+    if (!school?.id) return;
+    try {
+      const result = await apiService.updateMeeting(school.id, meetingId, data);
+      const savedMeeting = normalizeMeeting(result.meeting);
+      setMeetings(current => current.map(meeting => meeting.id === meetingId ? savedMeeting : meeting));
+      if (result.client) {
+        const savedClient = normalizeClient(result.client);
+        setClients(current => current.map(client => client.id === savedClient.id
+          ? { ...client, ...savedClient, meeting: savedMeeting } : client));
+      }
+      if (result.timeSlot) {
+        const savedSlot = normalizeTimeSlot(result.timeSlot);
+        setTimeSlots(current => current.map(slot => slot.id === savedSlot.id ? savedSlot : slot));
+      }
+    } catch (cause) {
+      console.error('Error updating meeting status:', cause);
+      toast.error('Не удалось сохранить статус встречи. Обновите страницу');
+    }
+  };
+
   const handleCancelMeeting = (meeting: Meeting) => {
     setMeetings(prevMeetings =>
       prevMeetings.map(m =>
@@ -484,15 +505,7 @@ export function MeetingsDashboard() {
 
     toast.success('Встреча отменена');
 
-    if (school?.id) {
-      Promise.all([
-        apiService.updateMeeting(school.id, meeting.id, { status: 'cancelled' }),
-        apiService.updateClient(school.id, meeting.clientId, { status: 'selecting_time' }),
-      ]).catch(error => {
-        console.error('Error cancelling meeting:', error);
-        toast.error('Ошибка отмены встречи');
-      });
-    }
+    void persistMeetingStatus(meeting.id, { status: 'cancelled' });
   };
 
   const handleSaveMeetingResult = (
@@ -505,6 +518,7 @@ export function MeetingsDashboard() {
       paymentMethod?: PaymentMethod;
     }
   ) => {
+    const resultMeeting = meetings.find(meeting => meeting.id === meetingId);
     setMeetings(prevMeetings =>
       prevMeetings.map(m =>
         m.id === meetingId
@@ -513,13 +527,12 @@ export function MeetingsDashboard() {
       )
     );
 
-    const meetingClient = clients.find(c => c.meeting?.id === meetingId);
     setClients(prevClients =>
       prevClients.map(client =>
-        client.meeting?.id === meetingId
+        client.id === resultMeeting?.clientId
           ? {
               ...client,
-              meeting: { ...client.meeting, ...result, updatedAt: new Date() },
+              meeting: resultMeeting ? { ...resultMeeting, ...result, updatedAt: new Date() } : client.meeting,
               status: result.status === 'completed_with_sale' ? 'completed_with_sale' : 'completed',
               updatedAt: new Date()
             }
@@ -533,24 +546,17 @@ export function MeetingsDashboard() {
         : 'Встреча отмечена как проведенная'
     );
 
-    if (school?.id) {
-      const clientStatus = result.status === 'completed_with_sale' ? 'completed_with_sale' : 'completed';
-      const promises = [apiService.updateMeeting(school.id, meetingId, result)];
-      if (meetingClient) {
-        promises.push(apiService.updateClient(school.id, meetingClient.id, { status: clientStatus }) as any);
-      }
-      Promise.all(promises).catch(error => {
-        console.error('Error saving meeting result:', error);
-        toast.error('Ошибка сохранения результата встречи');
-      });
-    }
+    void persistMeetingStatus(meetingId, result);
   };
 
   const handleMarkSale = (clientId: string, soldTariff: string, saleAmount: number) => {
     const client = clients.find(c => c.id === clientId);
-    if (!client || !client.meeting) return;
+    const saleMeeting = meetings
+      .filter(meeting => meeting.clientId === clientId && meeting.status === 'completed')
+      .sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+    if (!client || !saleMeeting) return;
 
-    const meetingId = client.meeting.id;
+    const meetingId = saleMeeting.id;
 
     setMeetings(prevMeetings =>
       prevMeetings.map(m =>
@@ -566,7 +572,7 @@ export function MeetingsDashboard() {
           ? {
               ...c,
               status: 'completed_with_sale' as const,
-              meeting: { ...c.meeting!, status: 'completed_with_sale' as const, soldTariff, saleAmount, updatedAt: new Date() },
+              meeting: { ...saleMeeting, status: 'completed_with_sale' as const, soldTariff, saleAmount, updatedAt: new Date() },
               updatedAt: new Date()
             }
           : c
@@ -575,15 +581,7 @@ export function MeetingsDashboard() {
 
     toast.success(`Продажа ${soldTariff} на сумму ${saleAmount.toLocaleString('ru-RU')} руб. отмечена!`);
 
-    if (school?.id) {
-      Promise.all([
-        apiService.updateMeeting(school.id, meetingId, { status: 'completed_with_sale', soldTariff, saleAmount }),
-        apiService.updateClient(school.id, clientId, { status: 'completed_with_sale' }),
-      ]).catch(error => {
-        console.error('Error marking sale:', error);
-        toast.error('Ошибка сохранения продажи');
-      });
-    }
+    void persistMeetingStatus(meetingId, { status: 'completed_with_sale', soldTariff, saleAmount });
   };
 
   const handleTogglePin = (clientId: string) => {
@@ -689,15 +687,7 @@ export function MeetingsDashboard() {
         'Встреча отменена'
       );
 
-      if (school?.id) {
-        Promise.all([
-          apiService.updateMeeting(school.id, meetingId, { status: newStatus, soldTariff, saleAmount, paymentMethod }),
-          apiService.updateClient(school.id, meeting.clientId, { status: newClientStatus }),
-        ]).catch(error => {
-          console.error('Error updating calendar status:', error);
-          toast.error('Ошибка обновления статуса');
-        });
-      }
+      void persistMeetingStatus(meetingId, { status: newStatus, soldTariff, saleAmount, paymentMethod });
     }
   };
 

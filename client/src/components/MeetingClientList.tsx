@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Client, ClientStatus, Meeting } from '../types';
+import { Client, ClientStatus, Meeting, getCurrentClientMeeting, getLatestClientStatus } from '../types';
 import { MeetingClientCard } from './MeetingClientCard';
 import { Input } from './ui/input';
 import { Users, Clock, Calendar, CheckCircle, DollarSign, XCircle, Search, RefreshCw } from 'lucide-react';
@@ -24,14 +24,13 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
 
   // Перенос — это событие встречи, а не отдельное состояние записи клиента.
   // Отображаем его как понятный фильтр, сохраняя историю и актуальное время встречи.
-  const isRescheduledClient = (client: Client) => Boolean(
-    client.meeting && (
-      client.meeting.status === 'rescheduled' ||
-      (client.meeting.rescheduleHistory?.length ?? 0) > 0
-    ),
-  );
+  const isRescheduledClient = (client: Client) => {
+    const current = getCurrentClientMeeting(client, meetings);
+    return Boolean(current && (current.status === 'scheduled' || current.status === 'scheduled_ready') &&
+      ((current.rescheduleHistory?.length ?? 0) > 0 || meetings.some(meeting => meeting.rescheduledToMeetingId === current.id)));
+  };
   const isScheduledClient = (client: Client) =>
-    (client.status === 'scheduled' || client.status === 'ready') && !isRescheduledClient(client);
+    (getLatestClientStatus(client, meetings) === 'scheduled' || getLatestClientStatus(client, meetings) === 'ready') && !isRescheduledClient(client);
 
   // Поиск идёт по Telegram-никнейму: менеджер может быстро найти клиента для повторной записи.
   const normalizedSearch = usernameSearch.trim().toLocaleLowerCase('ru-RU');
@@ -44,7 +43,7 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
       ? searchMatchedClients.filter(isRescheduledClient)
       : statusFilter === 'scheduled'
         ? searchMatchedClients.filter(isScheduledClient)
-        : searchMatchedClients.filter(client => client.status === statusFilter);
+        : searchMatchedClients.filter(client => getLatestClientStatus(client, meetings) === statusFilter);
 
   // Сортировка:
   // 1. Закрепленные клиенты (pinned) - всегда наверху (кроме отмененных)
@@ -54,11 +53,13 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
   // 5. Отмененные встречи (cancelled) - всегда внизу
   const sortedClients = [...filteredClients].sort((a, b) => {
     // Отмененные встречи всегда внизу
-    if (a.status === 'cancelled' && b.status !== 'cancelled') return 1;
-    if (a.status !== 'cancelled' && b.status === 'cancelled') return -1;
+    const aStatus = getLatestClientStatus(a, meetings);
+    const bStatus = getLatestClientStatus(b, meetings);
+    if (aStatus === 'cancelled' && bStatus !== 'cancelled') return 1;
+    if (aStatus !== 'cancelled' && bStatus === 'cancelled') return -1;
     
     // Если оба отменены, закрепленные среди отмененных тоже выше
-    if (a.status === 'cancelled' && b.status === 'cancelled') {
+    if (aStatus === 'cancelled' && bStatus === 'cancelled') {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
       return 0;
@@ -69,11 +70,11 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
     if (!a.pinned && b.pinned) return 1;
     
     // "Выбор времени" - наивысший приоритет среди не закрепленных
-    if (a.status === 'selecting_time' && b.status !== 'selecting_time') return -1;
-    if (a.status !== 'selecting_time' && b.status === 'selecting_time') return 1;
+    if (aStatus === 'selecting_time' && bStatus !== 'selecting_time') return -1;
+    if (aStatus !== 'selecting_time' && bStatus === 'selecting_time') return 1;
     
     // Если оба "Выбор времени", сортируем старые первыми
-    if (a.status === 'selecting_time' && b.status === 'selecting_time') {
+    if (aStatus === 'selecting_time' && bStatus === 'selecting_time') {
       return a.createdAt.getTime() - b.createdAt.getTime();
     }
     
@@ -85,7 +86,7 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
       'completed_with_sale': 2,
     };
     
-    const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+    const statusDiff = (statusOrder[aStatus] ?? 99) - (statusOrder[bStatus] ?? 99);
     if (statusDiff !== 0) return statusDiff;
     
     return 0;
@@ -94,12 +95,12 @@ export function MeetingClientList({ clients, onEdit, onToggleFormCompleted, onRe
   // Подсчет клиентов по статусам
   const statusCounts = {
     all: searchMatchedClients.length,
-    selecting_time: searchMatchedClients.filter(c => c.status === 'selecting_time').length,
+    selecting_time: searchMatchedClients.filter(c => getLatestClientStatus(c, meetings) === 'selecting_time').length,
     scheduled: searchMatchedClients.filter(isScheduledClient).length,
     rescheduled: searchMatchedClients.filter(isRescheduledClient).length,
-    completed: searchMatchedClients.filter(c => c.status === 'completed').length,
-    completed_with_sale: searchMatchedClients.filter(c => c.status === 'completed_with_sale').length,
-    cancelled: searchMatchedClients.filter(c => c.status === 'cancelled').length,
+    completed: searchMatchedClients.filter(c => getLatestClientStatus(c, meetings) === 'completed').length,
+    completed_with_sale: searchMatchedClients.filter(c => getLatestClientStatus(c, meetings) === 'completed_with_sale').length,
+    cancelled: searchMatchedClients.filter(c => getLatestClientStatus(c, meetings) === 'cancelled').length,
   };
 
   const statusFilters: Array<{

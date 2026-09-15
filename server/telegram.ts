@@ -377,7 +377,7 @@ export async function queueMeetingNotification(
           WHERE source.id = $3
         ))
       )
-    ) OR (recipient.role = 'architect' AND $2 <> 'booked')
+    ) OR recipient.role = 'architect'
   `, [meeting.manager_id, eventType, meeting.id]);
   for (const recipient of recipients.rows) {
     await query(`
@@ -476,14 +476,14 @@ function weekContaining(date: string): WeeklyPeriod {
 
 function moscowDailyWindow(): { date: string; window: DailyWindow } | null {
   const clock = moscowClock();
-  if (clock.hour === 9) return { date: clock.date, window: "morning" };
-  if (clock.hour === 20) return { date: clock.date, window: "evening" };
+  if (clock.hour >= 21) return { date: clock.date, window: "evening" };
+  if (clock.hour >= 9) return { date: clock.date, window: "morning" };
   return null;
 }
 
 function moscowWeeklyPeriod(): WeeklyPeriod | null {
   const clock = moscowClock();
-  if (clock.weekday !== "Sun" || clock.hour < 20) return null;
+  if (clock.weekday !== "Sun" || clock.hour < 21) return null;
   return weekContaining(clock.date);
 }
 
@@ -683,16 +683,24 @@ async function architectsAndSchools() {
   return { architects: architects.rows, schools: schools.rows };
 }
 
-export async function deliverDailyTelegramSummaries() {
+export async function deliverDailyTelegramSummariesForDate(date: string, window: DailyWindow) {
   if (!isTelegramConfigured()) return;
-  const schedule = moscowDailyWindow();
-  if (!schedule) return;
   const { architects, schools } = await architectsAndSchools();
   for (const architect of architects) {
     for (const school of schools) {
-      await deliverDailySummary(architect.id, architect.chat_id, school.id, school.name, schedule.date, schedule.window);
+      await deliverDailySummary(architect.id, architect.chat_id, school.id, school.name, date, window);
     }
   }
+}
+
+export async function deliverDailyTelegramSummaries() {
+  if (!isTelegramConfigured()) return;
+  const clock = moscowClock();
+  // Догоняем пропущенную вечернюю сводку после простоя сервера. Уникальный
+  // ключ в telegram_daily_summaries не позволит отправить её повторно.
+  await deliverDailyTelegramSummariesForDate(shiftDate(clock.date, -1), "evening");
+  const schedule = moscowDailyWindow();
+  if (schedule) await deliverDailyTelegramSummariesForDate(schedule.date, schedule.window);
 }
 
 function weeklySummaryText(schoolName: string, period: WeeklyPeriod, totals: OperationalTotals, managers: ManagerOperationalSummary[]) {
@@ -744,14 +752,22 @@ async function deliverWeeklySummary(recipientId: string, chatId: string, schoolI
   }
 }
 
-export async function deliverWeeklyTelegramSummaries() {
+export async function deliverWeeklyTelegramSummariesForPeriod(period: WeeklyPeriod) {
   if (!isTelegramConfigured()) return;
-  const period = moscowWeeklyPeriod();
-  if (!period) return;
   const { architects, schools } = await architectsAndSchools();
   for (const architect of architects) {
     for (const school of schools) await deliverWeeklySummary(architect.id, architect.chat_id, school.id, school.name, period);
   }
+}
+
+export async function deliverWeeklyTelegramSummaries() {
+  if (!isTelegramConfigured()) return;
+  const clock = moscowClock();
+  const thisWeek = weekContaining(clock.date);
+  const previousWeek = { start: shiftDate(thisWeek.start, -7), end: shiftDate(thisWeek.end, -7) };
+  await deliverWeeklyTelegramSummariesForPeriod(previousWeek);
+  const schedule = moscowWeeklyPeriod();
+  if (schedule) await deliverWeeklyTelegramSummariesForPeriod(schedule);
 }
 
 export async function initializeTelegramIntegration() {
@@ -761,20 +777,18 @@ export async function initializeTelegramIntegration() {
   }
   try {
     await configureWebhook();
-    void deliverPendingTelegramNotifications().catch(() => undefined);
-    void deliverPendingSlotNotifications().catch(() => undefined);
-    void deliverDailyTelegramSummaries().catch(() => undefined);
-    void deliverWeeklyTelegramSummaries().catch(() => undefined);
-    if (!deliveryTimer) {
-      deliveryTimer = setInterval(() => {
-        void deliverPendingTelegramNotifications().catch(() => undefined);
-        void deliverPendingSlotNotifications().catch(() => undefined);
-        void deliverDailyTelegramSummaries().catch(() => undefined);
-        void deliverWeeklyTelegramSummaries().catch(() => undefined);
-      }, 10 * 60_000);
-      deliveryTimer.unref();
-    }
-  } catch {
-    console.error("Telegram integration could not be initialized");
+  } catch (cause) {
+    console.error("Telegram webhook could not be initialized", cause instanceof Error ? cause.message : String(cause));
+  }
+  const deliver = () => {
+    void deliverPendingTelegramNotifications().catch(cause => console.error("Telegram notifications failed", cause));
+    void deliverPendingSlotNotifications().catch(cause => console.error("Telegram slot notifications failed", cause));
+    void deliverDailyTelegramSummaries().catch(cause => console.error("Telegram daily summary failed", cause));
+    void deliverWeeklyTelegramSummaries().catch(cause => console.error("Telegram weekly summary failed", cause));
+  };
+  deliver();
+  if (!deliveryTimer) {
+    deliveryTimer = setInterval(deliver, 60_000);
+    deliveryTimer.unref();
   }
 }

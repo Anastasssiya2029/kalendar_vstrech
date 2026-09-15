@@ -163,7 +163,6 @@ export function MeetingsCalendar({
   const [selectedMonth, setSelectedMonth] = useState(propCurrentMonth || new Date());
   const [calendarPeriod, setCalendarPeriod] = useState<CalendarPeriod>('month');
   const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
-  const [dayMeetingsState, setDayMeetingsState] = useState<Meeting[]>([]);
   const [managerFilter, setManagerFilter] = useState<string>('all');
   const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false);
   const [periodDropdownButton, setPeriodDropdownButton] = useState<HTMLButtonElement | null>(null);
@@ -596,9 +595,8 @@ export function MeetingsCalendar({
               clients={clients}
               isManager={user?.role === 'manager'}
               condensed={calendarPeriod !== 'month'}
-              onSelectDay={(date, dayMeetings) => {
+              onSelectDay={(date) => {
                 setSelectedDayDate(date);
-                setDayMeetingsState(dayMeetings);
               }}
             />
           ))}
@@ -638,14 +636,16 @@ export function MeetingsCalendar({
           day={selectedDayDate.getDate()}
           month={selectedDayDate.getMonth()}
           year={selectedDayDate.getFullYear()}
-          meetings={dayMeetingsState}
+          meetings={periodMeetings.filter(meeting =>
+            meeting.date.getFullYear() === selectedDayDate.getFullYear() &&
+            meeting.date.getMonth() === selectedDayDate.getMonth() &&
+            meeting.date.getDate() === selectedDayDate.getDate())}
           clients={clients}
           onStatusChange={onStatusChange}
           onUpdateNotes={onUpdateNotes}
           onRescheduleMeeting={onRescheduleMeeting}
           onClose={() => {
             setSelectedDayDate(null);
-            setDayMeetingsState([]);
           }}
           availableTariffs={availableTariffs}
         />
