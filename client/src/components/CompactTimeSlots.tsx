@@ -90,6 +90,15 @@ const getMonthDays = (date: Date): Date[] => {
 
 type TimeSlotsRange = 'month' | 'current_week' | 'next_week' | 'next_month';
 
+// These team members coordinate appointments rather than host meetings.
+// Keep their accounts and administrative permissions, but do not offer them
+// as recipients of new slots or as manager-filter chips.
+const NON_HOST_TEAM_MEMBER_IDS = new Set([
+  'dc590ab6-e8ba-4747-b972-e875d7d7b1fd', // Алена Ерофеева
+  '345510e6-58fe-40ea-889c-b0e199967450', // Анастасия Сухарева
+  'dc56cfae-d62f-4503-8798-f2875e1b43a7', // Виктория, менеджер по переписке
+]);
+
 export function CompactTimeSlots({
   slots,
   slotOwners = [],
@@ -127,17 +136,28 @@ export function CompactTimeSlots({
   const canManageTeamSlots = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'architect';
   const isManager = user?.role === 'manager';
 
-  // Only active team members can receive new slots. Historical slots may still be
-  // displayed, but must not resurrect a deactivated employee in the picker.
+  // Members returned by the API are active. The coordinator accounts above
+  // are intentionally excluded even though they can administer the schedule.
   const availableSlotOwners = useMemo(() => {
-    const managersMap = new Map<string, string>();
-    slotOwners.forEach((member) => managersMap.set(member.id, member.name));
-    if (user?.id && user?.name && !managersMap.has(user.id)) managersMap.set(user.id, user.name);
-    return Array.from(managersMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [slotOwners, user?.id, user?.name]);
+    const eligibleMembers = slotOwners.filter((member) => !NON_HOST_TEAM_MEMBER_IDS.has(member.id));
+    if (user?.role === 'manager' && user?.id && user?.name
+      && !eligibleMembers.some((member) => member.id === user.id)) {
+      return [...eligibleMembers, { id: user.id, name: user.name, role: 'manager' as const }];
+    }
+    return eligibleMembers;
+  }, [slotOwners, user?.id, user?.name, user?.role]);
+
+  // The filter is for viewing an existing schedule. The add form uses all
+  // eligible members, including managers who need their very first slot.
+  const managersWithVisibleSlots = useMemo(() => {
+    const dates = new Set(displayDays.map(formatDateForInput));
+    const ownerIds = new Set(slots.filter((slot) => dates.has(formatDateForInput(slot.date)))
+      .map((slot) => slot.managerId));
+    return availableSlotOwners.filter((member) => ownerIds.has(member.id));
+  }, [availableSlotOwners, displayDays, slots]);
 
   const effectiveManagerId = selectedManagerId === 'all'
-    || availableSlotOwners.some((member) => member.id === selectedManagerId)
+    || managersWithVisibleSlots.some((member) => member.id === selectedManagerId)
     ? selectedManagerId
     : 'all';
 
@@ -159,12 +179,14 @@ export function CompactTimeSlots({
   }, [slots, effectiveManagerId, user?.id, isManager]);
 
   const selectedSlotOwner = availableSlotOwners.find((member) => member.id === selectedSlotOwnerId)
-    ?? availableSlotOwners.find((member) => member.id === user?.id)
-    ?? { id: user?.id || '', name: user?.name || '' };
+    ?? availableSlotOwners[0]
+    ?? { id: '', name: '' };
 
   const openSlotForm = (date: Date | null = null) => {
     if (canManageTeamSlots && effectiveManagerId !== 'all') setSelectedSlotOwnerId(effectiveManagerId);
-    else if (!selectedSlotOwnerId && user?.id) setSelectedSlotOwnerId(user.id);
+    else if (!availableSlotOwners.some((member) => member.id === selectedSlotOwnerId)) {
+      setSelectedSlotOwnerId(availableSlotOwners[0]?.id || '');
+    }
     setNewSlotDate(date);
     setIsAddingSlot(true);
   };
@@ -182,7 +204,7 @@ export function CompactTimeSlots({
   }, [displayDays, filteredSlots]);
 
   const handleAddSlot = () => {
-    if (!newSlotDate) return;
+    if (!newSlotDate || !selectedSlotOwner.id) return;
 
     const slot: Omit<TimeSlot, 'id'> = {
       managerId: isManager ? user?.id || '' : selectedSlotOwner.id,
@@ -232,6 +254,7 @@ export function CompactTimeSlots({
           {user && (
             <Button
               onClick={() => openSlotForm()}
+              disabled={availableSlotOwners.length === 0}
               className="time-slots-add-button"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -241,7 +264,7 @@ export function CompactTimeSlots({
         </div>
 
         {/* Фильтр по менеджерам (только для не-менеджеров) */}
-        {canManageTeamSlots && availableSlotOwners.length > 0 && (
+        {canManageTeamSlots && managersWithVisibleSlots.length > 0 && (
           <div className="time-slots-manager-filter">
             <div className="flex items-center gap-2 flex-wrap">
               <User className="w-4 h-4 text-gray-500" />
@@ -254,7 +277,7 @@ export function CompactTimeSlots({
                 Все менеджеры
               </button>
               
-              {availableSlotOwners.map(manager => (
+              {managersWithVisibleSlots.map(manager => (
                 <button
                   key={manager.id}
                   onClick={() => setSelectedManagerId(manager.id)}
@@ -388,7 +411,7 @@ export function CompactTimeSlots({
               </div>
 
               {/* Кнопка добавления окошка для этого дня */}
-              {user && (
+              {user && availableSlotOwners.length > 0 && (
                 <button
                   onClick={() => openSlotForm(day)}
                   className="time-slots-add-day"
@@ -463,7 +486,7 @@ export function CompactTimeSlots({
               </Button>
               <Button
                 onClick={handleAddSlot}
-                disabled={!newSlotDate}
+                disabled={!newSlotDate || !selectedSlotOwner.id}
                 className="flex-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:via-purple-600 hover:to-pink-600 text-white rounded-xl"
               >
                 Добавить
