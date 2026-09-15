@@ -127,26 +127,27 @@ export function CompactTimeSlots({
   const canManageTeamSlots = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'architect';
   const isManager = user?.role === 'manager';
 
-  // The assignment list includes team members even before they create their first slot.
+  // Only active team members can receive new slots. Historical slots may still be
+  // displayed, but must not resurrect a deactivated employee in the picker.
   const availableSlotOwners = useMemo(() => {
     const managersMap = new Map<string, string>();
     slotOwners.forEach((member) => managersMap.set(member.id, member.name));
-    slots.forEach(slot => {
-      if (!managersMap.has(slot.managerId)) {
-        managersMap.set(slot.managerId, slot.managerName);
-      }
-    });
     if (user?.id && user?.name && !managersMap.has(user.id)) managersMap.set(user.id, user.name);
     return Array.from(managersMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [slotOwners, slots, user?.id, user?.name]);
+  }, [slotOwners, user?.id, user?.name]);
+
+  const effectiveManagerId = selectedManagerId === 'all'
+    || availableSlotOwners.some((member) => member.id === selectedManagerId)
+    ? selectedManagerId
+    : 'all';
 
   // Фильтрация слотов
   const filteredSlots = useMemo(() => {
     let filtered = slots;
     
     // Фильтр по менеджеру (для не-менеджеров)
-    if (!isManager && selectedManagerId !== 'all') {
-      filtered = filtered.filter(slot => slot.managerId === selectedManagerId);
+    if (!isManager && effectiveManagerId !== 'all') {
+      filtered = filtered.filter(slot => slot.managerId === effectiveManagerId);
     }
     
     // Фильтр по менеджеру (для менеджеров - только свои)
@@ -155,14 +156,14 @@ export function CompactTimeSlots({
     }
     
     return filtered;
-  }, [slots, selectedManagerId, user?.id, isManager]);
+  }, [slots, effectiveManagerId, user?.id, isManager]);
 
   const selectedSlotOwner = availableSlotOwners.find((member) => member.id === selectedSlotOwnerId)
     ?? availableSlotOwners.find((member) => member.id === user?.id)
     ?? { id: user?.id || '', name: user?.name || '' };
 
   const openSlotForm = (date: Date | null = null) => {
-    if (canManageTeamSlots && selectedManagerId !== 'all') setSelectedSlotOwnerId(selectedManagerId);
+    if (canManageTeamSlots && effectiveManagerId !== 'all') setSelectedSlotOwnerId(effectiveManagerId);
     else if (!selectedSlotOwnerId && user?.id) setSelectedSlotOwnerId(user.id);
     setNewSlotDate(date);
     setIsAddingSlot(true);
@@ -248,7 +249,7 @@ export function CompactTimeSlots({
               
               <button
                 onClick={() => setSelectedManagerId('all')}
-                className={`time-slots-manager-chip ${selectedManagerId === 'all' ? 'is-active' : ''}`}
+                className={`time-slots-manager-chip ${effectiveManagerId === 'all' ? 'is-active' : ''}`}
               >
                 Все менеджеры
               </button>
@@ -257,7 +258,7 @@ export function CompactTimeSlots({
                 <button
                   key={manager.id}
                   onClick={() => setSelectedManagerId(manager.id)}
-                className={`time-slots-manager-chip ${selectedManagerId === manager.id ? 'is-active' : ''}`}
+                className={`time-slots-manager-chip ${effectiveManagerId === manager.id ? 'is-active' : ''}`}
                 >
                   {manager.name}{manager.id === user?.id ? ' (я)' : ''}
                 </button>
@@ -375,7 +376,7 @@ export function CompactTimeSlots({
                       </div>
 
                       {/* Имя менеджера (только для не-менеджеров при просмотре всех) */}
-                      {!isManager && selectedManagerId === 'all' && (
+                      {!isManager && effectiveManagerId === 'all' && (
                         <div className="time-slots-slot-manager">
                           <User className="w-3 h-3" />
                           <span>{slot.managerName}</span>

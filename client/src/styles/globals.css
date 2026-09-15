@@ -1769,13 +1769,11 @@ label:not([class*='text-']) {
 }
 
 .time-slots-slot-time {
-  min-width: 0;
-  overflow: hidden;
+  flex: 0 0 auto;
   color: var(--slot-ink);
   font-size: 0.875rem;
   font-weight: 760;
   line-height: 1.15;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1935,7 +1933,7 @@ label:not([class*='text-']) {
 
 @media (min-width: 40rem) {
   .time-slots-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   }
 
   .time-slots-summary-grid {
@@ -1944,10 +1942,6 @@ label:not([class*='text-']) {
 }
 
 @media (min-width: 64rem) {
-  .time-slots-grid {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-
   .time-slots-day {
     min-height: 15rem;
   }
