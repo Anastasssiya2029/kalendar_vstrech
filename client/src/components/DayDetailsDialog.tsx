@@ -98,6 +98,7 @@ export function DayDetailsDialog({
 
   const getMeetingTone = (status: Meeting['status']) => {
     switch (status) {
+      case 'scheduled_ready': return 'ready';
       case 'completed': return 'completed';
       case 'completed_with_sale': return 'sale';
       case 'rescheduled': return 'rescheduled';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Client, Meeting, getClientStatusColor, getClientStatusText, getMeetingStatusColor, getMeetingStatusText, getCurrentClientMeeting, getLatestClientStatus } from '../types';
+import { Client, Meeting, getClientStatusColor, getClientStatusText, getMeetingStatusColor, getMeetingStatusText, getActualMeetingStatus, getCurrentClientMeeting, getLatestClientStatus } from '../types';
 import { TelegramUsername } from './TelegramUsername';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -45,6 +45,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
   const currentMeeting = getCurrentClientMeeting(sourceClient, meetings);
   const client = { ...sourceClient, status: getLatestClientStatus(sourceClient, meetings), meeting: currentMeeting };
+  const currentMeetingStatus = client.meeting ? getActualMeetingStatus(client.meeting, client) : null;
   const clientMeetingsFromStore = meetings
     .filter((meeting) => meeting.clientId === client.id)
     .sort((a, b) => b.date.getTime() - a.date.getTime() || b.startTime.localeCompare(a.startTime));
@@ -250,55 +251,49 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
           {/* Информация о встрече */}
           {client.meeting && (
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-purple-900">Встреча</h4>
+            <section className={`client-current-meeting ${currentMeetingStatus === 'scheduled_ready' ? 'client-current-meeting--ready' : ''}`} aria-label="Актуальная встреча клиента">
+              <div className="client-current-meeting-heading">
+                <div className="client-current-meeting-title">
+                  <span className="client-current-meeting-icon"><Calendar className="w-4 h-4" /></span>
+                  <div><p>Актуальная запись</p><h4>Встреча</h4></div>
                   {/* Индикатор перенесенной встречи */}
                   {hasRescheduleHistory && client.meeting.rescheduleHistory && (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 rounded-lg">
-                      <span className="text-lg">🙏</span>
-                      <span className="text-xs font-semibold text-blue-700">
-                        {client.meeting.rescheduleHistory.length}x
-                      </span>
-                    </div>
+                    <span className="client-current-meeting-reschedule"><RefreshCw className="w-3 h-3" />Перенос ×{client.meeting.rescheduleHistory.length}</span>
                   )}
                 </div>
-                <span 
-                  className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
-                  style={{ backgroundColor: getMeetingStatusColor(client.meeting.status) }}
+                <span
+                  className="client-current-meeting-status"
+                  style={{ backgroundColor: getMeetingStatusColor(currentMeetingStatus ?? client.meeting.status) }}
                 >
-                  {getMeetingStatusText(client.meeting.status)}
+                  {currentMeetingStatus === 'scheduled_ready' ? 'Анкета заполнена' : getMeetingStatusText(client.meeting.status)}
                 </span>
               </div>
 
-              <div className="space-y-2">
+              <div className="client-current-meeting-facts">
                 {/* Дата и время */}
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Calendar className="w-4 h-4 text-purple-600" />
+                <div className="client-current-meeting-fact">
+                  <Calendar className="w-4 h-4" />
                   <span>{formatDateShort(client.meeting.date)}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Clock className="w-4 h-4 text-purple-600" />
+                <div className="client-current-meeting-fact">
+                  <Clock className="w-4 h-4" />
                   <span>{client.meeting.startTime}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <User className="w-4 h-4 text-purple-600" />
+                <div className="client-current-meeting-fact client-current-meeting-fact--manager">
+                  <User className="w-4 h-4" />
                   <span>{client.meeting.managerName}</span>
                 </div>
 
                 {/* Причина переноса */}
                 {hasRescheduleHistory && client.meeting.rescheduleHistory && client.meeting.rescheduleHistory.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-purple-200">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-sm text-blue-900 mb-1">
-                        <strong>Причина переноса:</strong>
-                      </p>
+                  <div className="client-current-meeting-note client-current-meeting-note--reschedule">
+                    <div>
+                      <p><strong>Причина переноса</strong></p>
                       {client.meeting.rescheduleHistory.map((history, index) => (
-                        <div key={index} className="text-sm text-blue-700">
-                          <span className="text-blue-500">•</span> {history.reason}
+                        <div key={index}>
+                          {history.reason}
                           {(client.meeting?.rescheduleHistory?.length ?? 0) > 1 && (
-                            <span className="text-xs text-blue-600 ml-1">
+                            <span className="text-xs ml-1">
                               ({formatDateShort(history.oldDate)} → {formatDateShort(history.newDate)})
                             </span>
                           )}
@@ -310,7 +305,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
                 {/* Информация о продаже */}
                 {client.meeting.status === 'completed_with_sale' && client.meeting.soldTariff && (
-                  <div className="mt-3 pt-3 border-t border-purple-200">
+                  <div className="client-current-meeting-note">
                     <p className="text-sm font-semibold text-purple-900">
                       Продан тариф: {client.meeting.soldTariff}
                     </p>
@@ -335,7 +330,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
                 {/* Заметки */}
                 {client.meeting.notes && (
-                  <div className="mt-3 pt-3 border-t border-purple-200">
+                  <div className="client-current-meeting-note">
                     <p className="text-sm text-gray-700">
                       <strong>Заметки:</strong> {client.meeting.notes}
                     </p>
@@ -344,7 +339,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
                 {/* Кнопки управления встречей */}
                 {client.meeting.status === 'scheduled' && onRescheduleMeeting && (
-                  <div className="mt-3 pt-3 border-t border-purple-200 flex gap-2">
+                  <div className="client-current-meeting-actions">
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -352,7 +347,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
                       }}
                       variant="outline"
                       size="sm"
-                      className="flex-1 text-blue-600 border-blue-300 hover:bg-blue-50"
+                      className="client-current-meeting-action client-current-meeting-action--reschedule"
                     >
                       <RefreshCw className="w-3 h-3 mr-1" />
                       Перенести
@@ -365,7 +360,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
                         }}
                         variant="outline"
                         size="sm"
-                        className="flex-1 text-rose-700 border-rose-200 hover:bg-rose-50"
+                        className="client-current-meeting-action client-current-meeting-action--cancel"
                       >
                         <XCircle className="w-3 h-3 mr-1" />
                         Отменить
@@ -376,7 +371,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
                 {/* Кнопка переноса для отмененных встреч */}
                 {client.meeting.status === 'cancelled' && onRescheduleMeeting && (
-                  <div className="mt-3 pt-3 border-t border-purple-200">
+                  <div className="client-current-meeting-actions">
                     <Button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -384,7 +379,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
                       }}
                       variant="outline"
                       size="sm"
-                      className="w-full text-blue-600 border-blue-300 hover:bg-blue-50"
+                      className="client-current-meeting-action client-current-meeting-action--reschedule"
                     >
                       <RefreshCw className="w-3 h-3 mr-1" />
                       Перенести встречу
@@ -394,7 +389,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
 
                 {/* Форма отметки продажи для проведенных встреч */}
                 {client.meeting.status === 'completed' && onMarkSale && (
-                  <div className="mt-3 pt-3 border-t border-purple-200">
+                  <div className="client-current-meeting-actions">
                     {!showSaleForm ? (
                       <Button
                         onClick={() => {
@@ -402,7 +397,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
                         }}
                         variant="outline"
                         size="sm"
-                        className="w-full text-green-600 border-green-300 hover:bg-green-50 hover:text-green-600"
+                        className="client-current-meeting-action client-current-meeting-action--sale"
                       >
                         <DollarSign className="w-4 h-4 mr-2" />
                         Отметить продажу
@@ -475,7 +470,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
                   </div>
                 )}
               </div>
-            </div>
+            </section>
           )}
 
           {clientMeetings.length > 0 && (
@@ -490,6 +485,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
               <div className="client-meeting-history-list">
                 {clientMeetings.map((meeting) => {
                   const isManageable = meeting.status === 'scheduled' || meeting.status === 'scheduled_ready';
+                  const actualStatus = getActualMeetingStatus(meeting, client);
                   return (
                     <article className={`client-meeting-history-item client-meeting-history-item--${meeting.status}`} key={meeting.id}>
                       <div className="client-meeting-history-main">
@@ -505,7 +501,7 @@ export function MeetingClientCard({ client: sourceClient, onEdit, onToggleFormCo
                         )}
                       </div>
                       <div className="client-meeting-history-side">
-                        <span className="client-meeting-history-status" style={{ backgroundColor: getHistoryStatusColor(meeting.status) }}>
+                        <span className="client-meeting-history-status" style={{ backgroundColor: getHistoryStatusColor(actualStatus) }}>
                           {getMeetingStatusText(meeting.status)}
                         </span>
                         {isManageable && (onRescheduleMeeting || onCancelMeeting) && (

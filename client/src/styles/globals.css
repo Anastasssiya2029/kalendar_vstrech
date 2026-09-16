@@ -4986,3 +4986,120 @@ table tr {
     grid-template-columns: 1fr;
   }
 }
+
+/* Те же насыщенные статусные тона, что и у окошек команды. */
+.calendar-period-meeting-chip {
+  --meeting-chip-surface: #cbd3df;
+  --meeting-chip-line: #aeb9c8;
+  --meeting-chip-ink: #344050;
+  padding: 0.22rem 0.32rem;
+  border-radius: 0.53rem;
+  background: linear-gradient(145deg, #fff 0%, var(--meeting-chip-surface) 100%);
+  border-color: var(--meeting-chip-line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 3px 8px rgba(53,62,76,.09);
+}
+.calendar-period-meeting-chip--ready { --meeting-chip-surface:#9de2b6; --meeting-chip-line:#6fbd8b; --meeting-chip-ink:#165c36; }
+.calendar-period-meeting-chip--completed { --meeting-chip-surface:#ffc17d; --meeting-chip-line:#e99b4c; --meeting-chip-ink:#8a4110; }
+.calendar-period-meeting-chip--sale { --meeting-chip-surface:#cf9bd4; --meeting-chip-line:#ad6db4; --meeting-chip-ink:#57236d; }
+.calendar-period-meeting-chip--rescheduled { --meeting-chip-surface:#9cc7ff; --meeting-chip-line:#6ca6ec; --meeting-chip-ink:#174d9f; }
+.calendar-period-meeting-chip--cancelled { --meeting-chip-surface:#ffaebc; --meeting-chip-line:#e87d94; --meeting-chip-ink:#96223e; }
+.calendar-period-meeting-icon {
+  display: inline-block;
+  width: .75rem;
+  height: .75rem;
+  margin-right: .18rem;
+  vertical-align: -.11rem;
+}
+.calendar-period-dot {
+  --calendar-dot:#9ca3af;
+  width: .38rem;
+  height: .38rem;
+  background: var(--calendar-dot);
+  box-shadow: 0 0 0 2px #fff, 0 1px 4px color-mix(in srgb, var(--calendar-dot) 40%, transparent);
+}
+.calendar-period-dot--ready { --calendar-dot:#2f9e63; }
+.calendar-period-dot--completed { --calendar-dot:#d47d32; }
+.calendar-period-dot--sale { --calendar-dot:#6f2e89; }
+.calendar-period-dot--rescheduled { --calendar-dot:#3b82f6; }
+.calendar-period-dot--cancelled { --calendar-dot:#d44b66; }
+.calendar-period-legend-swatch {
+  --legend-surface:#cbd3df;
+  --legend-line:#aeb9c8;
+  flex: 0 0 1rem;
+  height: 1rem;
+  border-radius: .36rem;
+  border: 1px solid var(--legend-line);
+  background: linear-gradient(145deg, #fff, var(--legend-surface));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 2px 5px rgba(40,30,50,.08);
+}
+.calendar-period-legend-swatch--ready { --legend-surface:#9de2b6; --legend-line:#6fbd8b; }
+.calendar-period-legend-swatch--completed { --legend-surface:#ffc17d; --legend-line:#e99b4c; }
+.calendar-period-legend-swatch--sale { --legend-surface:#cf9bd4; --legend-line:#ad6db4; }
+.calendar-period-legend-swatch--rescheduled { --legend-surface:#9cc7ff; --legend-line:#6ca6ec; }
+.calendar-period-legend-swatch--cancelled { --legend-surface:#ffaebc; --legend-line:#e87d94; }
+.meeting-detail-card--ready { --meeting-detail-accent:#2f9e63; }
+
+/* Актуальная встреча в карточке клиента: светлая поверхность и читаемый текст. */
+.client-current-meeting {
+  padding: clamp(.85rem, 2vw, 1.15rem);
+  color: #382d3d;
+  background: #fff;
+  background-image: none;
+  border: 1px solid #e8dfea;
+  border-radius: 1.1rem;
+  box-shadow: 0 7px 19px rgba(47,27,55,.055);
+}
+.client-current-meeting--ready { border-color: #b9dfc7; }
+.client-current-meeting-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .65rem;
+  padding-bottom: .85rem;
+  border-bottom: 1px solid #eee6ef;
+}
+.client-current-meeting-title { display:flex; flex-wrap:wrap; align-items:center; gap:.55rem; min-width:0; }
+.client-current-meeting-icon {
+  display:grid; place-items:center; width:2rem; height:2rem; flex:0 0 2rem;
+  color:#713b80; background:#f5edf6; border:1px solid #ebdcec; border-radius:.7rem;
+}
+.client-current-meeting-title p { margin:0; color:#8d738d; font-size:.67rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.client-current-meeting-title h4 { margin:0; color:#31213a; font-size:1rem; font-weight:800; line-height:1.15; }
+.client-current-meeting-status {
+  display:inline-flex; align-items:center; min-height:1.65rem; padding:.25rem .65rem;
+  color:#fff; border-radius:999px; font-size:.73rem; font-weight:800; white-space:nowrap;
+}
+.client-current-meeting-reschedule {
+  display:inline-flex; align-items:center; gap:.25rem; padding:.22rem .45rem;
+  color:#1e5eab; background:#eff6ff; border:1px solid #c6ddfb; border-radius:999px;
+  font-size:.69rem; font-weight:750;
+}
+.client-current-meeting-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; padding-top:.8rem; }
+.client-current-meeting-fact {
+  display:flex; align-items:center; gap:.48rem; min-width:0; padding:.65rem .75rem;
+  color:#4d4154; background:#faf8fb; border:1px solid #eee6ef; border-radius:.75rem;
+  font-size:.85rem; font-weight:650;
+}
+.client-current-meeting-fact svg { flex:0 0 1rem; color:#815388; }
+.client-current-meeting-fact span { min-width:0; overflow-wrap:anywhere; }
+.client-current-meeting-fact--manager,
+.client-current-meeting-note,
+.client-current-meeting-actions { grid-column:1 / -1; }
+.client-current-meeting-note {
+  padding:.75rem .85rem; color:#56475d; background:#faf8fb;
+  border:1px solid #eee6ef; border-radius:.8rem; font-size:.83rem; line-height:1.45;
+}
+.client-current-meeting-note--reschedule { color:#31577f; background:#f6faff; border-color:#dce9f8; }
+.client-current-meeting-note p { margin:0 0 .25rem; }
+.client-current-meeting-note div { overflow-wrap:anywhere; }
+.client-current-meeting-actions { display:flex; flex-wrap:wrap; gap:.5rem; padding-top:.7rem; border-top:1px solid #eee6ef; }
+.client-current-meeting-action { width:auto; min-width:0; border-radius:.75rem; font-weight:750; }
+.client-current-meeting-action--reschedule { color:#1e5eab; border-color:#c6ddfb; background:#f6faff; }
+.client-current-meeting-action--cancel { color:#ad314f; border-color:#f0c8d2; background:#fff8fa; }
+.client-current-meeting-action--sale { color:#713b80; border-color:#e4cce8; background:#fcf5fd; }
+@media (max-width: 28rem) {
+  .client-current-meeting-facts { grid-template-columns:1fr; }
+  .client-current-meeting-heading { align-items:center; }
+  .client-current-meeting-actions button { flex:1 1 auto; }
+}

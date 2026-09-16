@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Meeting, Client, Tariff, PaymentMethod, getMeetingStatusColor, getActualMeetingStatus } from '../types';
+import { Meeting, Client, Tariff, PaymentMethod, getActualMeetingStatus } from '../types';
 import { Button } from './ui/button';
 import { ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, TrendingUp, CheckCircle, RefreshCw, XCircle, DollarSign } from 'lucide-react';
 import { DayDetailsDialog } from './DayDetailsDialog';
@@ -46,6 +46,7 @@ type CalendarPeriod = 'month' | 'quarter' | 'year';
 
 const getMeetingTone = (status: Meeting['status']) => {
   switch (status) {
+    case 'scheduled_ready': return 'ready';
     case 'completed': return 'completed';
     case 'completed_with_sale': return 'sale';
     case 'rescheduled': return 'rescheduled';
@@ -120,7 +121,8 @@ function CalendarMonthView({
                   {sortedDayMeetings.slice(0, 3).map(meeting => {
                     const client = clients.find(item => item.id === meeting.clientId);
                     if (!client) return null;
-                    return <span key={meeting.id} className="calendar-period-dot" style={{ backgroundColor: getMeetingStatusColor(getActualMeetingStatus(meeting, client)) }} />;
+                    const actualStatus = getActualMeetingStatus(meeting, client);
+                    return <span key={meeting.id} className={`calendar-period-dot calendar-period-dot--${getMeetingTone(actualStatus)}`} />;
                   })}
                 </span>
               ) : (
@@ -133,8 +135,9 @@ function CalendarMonthView({
                       <span
                         key={meeting.id}
                         className={`calendar-period-meeting-chip calendar-period-meeting-chip--${getMeetingTone(actualStatus)}`}
-                        title={`${client.firstName} ${client.lastName} — ${meeting.startTime}${isManager ? '' : ` (${meeting.managerName})`}`}
+                        title={`${client.firstName} ${client.lastName} — ${meeting.startTime}${isManager ? '' : ` (${meeting.managerName})`}${actualStatus === 'scheduled_ready' ? ' • Анкета заполнена' : ''}`}
                       >
+                        {actualStatus === 'scheduled_ready' && <CheckCircle className="calendar-period-meeting-icon" aria-hidden="true" />}
                         {meeting.startTime} {client.firstName}{isManager ? '' : ` • ${meeting.managerName}`}
                       </span>
                     );
@@ -606,25 +609,29 @@ export function MeetingsCalendar({
       {/* Легенда */}
       <div className="bg-white rounded-3xl shadow-lg p-6">
         <h3 className="font-bold text-[#2D1B69] mb-4">Обозначения</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: getMeetingStatusColor('scheduled') }} />
+            <div className="calendar-period-legend-swatch calendar-period-legend-swatch--scheduled" />
             <span className="text-sm text-gray-700">Записан</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: getMeetingStatusColor('completed') }} />
+            <div className="calendar-period-legend-swatch calendar-period-legend-swatch--ready" />
+            <span className="text-sm text-gray-700">Анкета заполнена</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="calendar-period-legend-swatch calendar-period-legend-swatch--completed" />
             <span className="text-sm text-gray-700">Проведена</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: getMeetingStatusColor('completed_with_sale') }} />
+            <div className="calendar-period-legend-swatch calendar-period-legend-swatch--sale" />
             <span className="text-sm text-gray-700">С продажей</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: getMeetingStatusColor('cancelled') }} />
+            <div className="calendar-period-legend-swatch calendar-period-legend-swatch--cancelled" />
             <span className="text-sm text-gray-700">Отменена</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: getMeetingStatusColor('rescheduled') }} />
+            <div className="calendar-period-legend-swatch calendar-period-legend-swatch--rescheduled" />
             <span className="text-sm text-gray-700">Перенесена</span>
           </div>
         </div>
